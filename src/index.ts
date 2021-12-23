@@ -1,4 +1,4 @@
-import { funcCall, rawValue, tableAllFields, tableField, tableRef, selectStatement, JoinType, derivedTable, subquery, tableRefWithAlias } from "./builder";
+import { funcCall, rawValue, tableAllFields, tableField, tableRef, selectStatement, JoinType, derivedTable, subquery, tableRefWithAlias, compare, identifier, SqlNode, ValidComparisonSigns, and, Compare, And, Or, or } from "./builder";
 import type { SelectStatement } from "./builder";
 
 const toSql = Symbol('to sql')
@@ -17,7 +17,7 @@ type TableSource = {
     many(tableOrView: string, fn?: Fn): TableSource,
     alias(jsonProp: string): TableSource,
     targetTable(name: string): TableSource,
-    where(sql: string): TableSource,
+    where(fn: (builder: WhereBuilder) => void): TableSource,
     field(name: string): Field,
     value(jsonProp: string, value: string): Value,
 } & ToSql
@@ -92,14 +92,54 @@ function createValue(jsonProp: string, value: string): Value {
     }
 }
 
-function createWhereClause(sql: string): Where {
+function createWhereClause(builderResult: WhereBuilder): Where {
+
     return {
         type: Types.WHERE,
-        [toSql](statement) {
-            statement.addWhereClause(sql)
+
+        [toSql](statement, ctx) {
+            statement.addWhereClause(builderResult.build(ctx))
         }
     }
 }
+
+function createWhereBuilder() {
+    type Item = { type: 'and' | 'or', name: string, comparison: ValidComparisonSigns, value: string }
+
+    let items: Item[] = []
+
+    return {
+        and(name: string, comparison: ValidComparisonSigns, value: string) {
+            items.push({
+                type: 'and',
+                name,
+                value,
+                comparison
+            })
+        },
+        or(name: string, comparison: ValidComparisonSigns, value: string) {
+            items.push({
+                type: 'or',
+                name,
+                value,
+                comparison
+            })
+        },
+        build(ctx: Context) {
+            return items.reduce((acc: Compare | And | Or | null, item) => {
+                if (acc) {
+                    const op = item.type === 'and' ? and : or;
+                    acc = op(acc, compare(tableField(ctx.tableAlias, item.name), item.comparison, rawValue(item.value)))
+                } else {
+                    acc = compare(tableField(ctx.tableAlias, item.name), item.comparison, rawValue(item.value))
+                }
+                return acc
+            }, null)
+        }
+    }
+}
+
+type WhereBuilder = ReturnType<typeof createWhereBuilder>
 
 function createTableSource(fieldName: string, fn?: Fn) {
     const children: Item[] = [];
@@ -110,6 +150,10 @@ function createTableSource(fieldName: string, fn?: Fn) {
 
     const callToSqlForChilds = (statement: SelectStatement, ctx: Context) => {
         children.forEach(child => child[toSql](statement, ctx))
+    }
+
+    const guessForeignKey = (ctx: Context) => {
+        return `${ctx.table.toLowerCase()}_id`
     }
 
     const instance: TableSource = {
@@ -123,8 +167,10 @@ function createTableSource(fieldName: string, fn?: Fn) {
             alias = jsonProp;
             return this
         },
-        where(sql: string) {
-            children.push(createWhereClause(sql))
+        where(fn: (builder: WhereBuilder) => void) {
+            const builder = createWhereBuilder()
+            fn(builder)
+            children.push(createWhereClause(builder))
             return this
         },
         targetTable(name) {
@@ -148,48 +194,52 @@ function createTableSource(fieldName: string, fn?: Fn) {
                 const alias = ctx.genTableAlias()
 
                 const subCtx = ctx.sub()
-                subCtx.table = alias;
+                subCtx.tableAlias = alias;
+                subCtx.table = table;
 
-                const a = tableField(alias, `${ctx.table.toLowerCase()}_id`)
-                const b = tableField(ctx.table, 'id')
+                const a = tableField(alias, guessForeignKey(ctx))
+                const b = tableField(ctx.tableAlias, 'id')
 
                 if (hasSubRelations()) {
-
                     const derivedJoinTable = selectStatement()
                     derivedJoinTable.source(tableRef(table), alias)
 
                     callToSqlForChilds(derivedJoinTable, subCtx)
 
-                    derivedJoinTable.addWhereClause(`${a}=${b}`)
+                    derivedJoinTable.addWhereClause(compare(a, '=', b))
 
                     const derivedAlias = ctx.genTableAlias();
 
-                    statement.joins.add(JoinType.LEFT_JOIN_NATURAL, derivedTable(derivedJoinTable, derivedAlias), rawValue(1), rawValue(1))
+                    statement.joins.add(JoinType.LEFT_JOIN_NATURAL, derivedTable(derivedJoinTable, derivedAlias), identifier.true)
 
                     statement.fields.add(funcCall('json_agg', tableAllFields(derivedAlias)), fieldName)
                 } else {
-                    statement.joins.add(JoinType.LEFT_JOIN, tableRefWithAlias(tableRef(table), alias), a, b)
+                    statement.joins.add(JoinType.LEFT_JOIN, tableRefWithAlias(tableRef(table), alias), compare(a, '=', b))
 
                     const subStatement = selectStatement()
 
                     callToSqlForChilds(subStatement, subCtx)
 
-                    statement.fields.add(funcCall('json_build_object', ...subStatement.fields.flattened()), fieldName)
+                    subStatement.fields.jsonAgg(fieldName)
+
+                    statement.fields.append(subStatement.fields)
                 }
 
-                statement.addGroupBy(tableField(ctx.table, 'id'))
+                statement.addGroupBy(tableField(ctx.tableAlias, 'id'))
 
             } else { // root select
                 const alias = ctx.genTableAlias()
 
                 const subCtx = ctx.sub()
-                subCtx.table = alias;
+                subCtx.table = table;
+                subCtx.tableAlias = alias;
 
                 const subSelect = selectStatement()
                 subSelect.source(tableRef(table), alias)
 
                 callToSqlForChilds(subSelect, subCtx)
-                subSelect.fields.jsonAgg()
+
+                subSelect.fields.json()
 
                 statement.fields.add(subquery(subSelect), fieldName)
             }
@@ -214,10 +264,11 @@ export function graphQuery() {
             const statement = selectStatement()
             const ctx = createContext()
 
-            const jsonSelect = selectStatement()
-            sources[0][toSql](jsonSelect, ctx)
+            sources.forEach(source => {
+                source[toSql](statement, ctx)
+            })
 
-            statement.fields.add(funcCall('json_build_object', ...jsonSelect.fields.flattened()))
+            statement.fields.json()
 
             return statement.toSql()
         }
@@ -231,12 +282,20 @@ const graph = graphQuery()
 graph.source('User', user => {
     user.field('email')
 
+    user.where(b => {
+        b.and('email', '=', 'bla')
+    })
+
     user.many('Tree', tree => {
         //comment.where('creation_date', '>', 'something');
 
-        // tree.many('Order', order => {
-        //     order.field('id')
-        // })
+        tree.where(b => {
+            b.and('creation_date', '=', 'bla')
+        })
+
+        tree.many('Order', order => {
+            order.field('id')
+        })
 
         /* explicitly use crap */
         //comment.relation('created_by').targetTable('user').alias('createdBy')
@@ -280,7 +339,7 @@ console.log(graph.toSql())
     - relation variants
         - one to many
         - one to one
-    - ast?
+    - ast? x
     - test suite
 
     IDEAS:

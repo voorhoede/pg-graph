@@ -28,6 +28,41 @@ __export(src_exports, {
 });
 
 // src/builder.ts
+function and(left, right) {
+  return {
+    type: "and",
+    toSql() {
+      return "(" + left.toSql() + " AND " + right.toSql() + ")";
+    }
+  };
+}
+function or(left, right) {
+  return {
+    type: "or",
+    toSql() {
+      return "(" + left.toSql() + " OR " + right.toSql() + ")";
+    }
+  };
+}
+function compare(left, comparison, right) {
+  return {
+    type: "comparison",
+    toSql() {
+      return left.toSql() + " " + comparison + " " + right.toSql();
+    }
+  };
+}
+function identifier(value) {
+  return {
+    type: "identifier",
+    value,
+    toSql() {
+      return value;
+    }
+  };
+}
+identifier.true = identifier("true");
+identifier.false = identifier("true");
 function funcCall(name, ...args) {
   return {
     type: "funcCall",
@@ -138,12 +173,12 @@ function selectStatement() {
       get length() {
         return joins.length;
       },
-      add(type, src, a, b) {
-        joins.push({ type, src, a, b });
+      add(type, src, compare2) {
+        joins.push({ type, src, compare: compare2 });
       },
       toSql() {
         return joins.map((join) => {
-          return `${join.type} ${join.src.toSql()} ON ${join.a.toSql()} = ${join.b.toSql()}`;
+          return `${join.type} ${join.src.toSql()} ON ${join.compare.toSql()}`;
         }).join(" ");
       },
       [Symbol.iterator]() {
@@ -168,11 +203,19 @@ function selectStatement() {
           return field.sql.toSql() + (field.alias ? ` as ${field.alias}` : "");
         }).join(", ");
       },
-      json() {
-        fields = [{ sql: funcCall("json_build_object", ...this.flattened()) }];
+      get(index) {
+        return fields[index];
       },
-      jsonAgg() {
-        fields = [{ sql: funcCall("json_agg", funcCall("json_build_object", ...this.flattened())) }];
+      json(alias) {
+        fields = [{ sql: funcCall("json_build_object", ...this.flattened()), alias }];
+      },
+      jsonAgg(alias) {
+        fields = [{ sql: funcCall("json_agg", funcCall("json_build_object", ...this.flattened())), alias }];
+      },
+      append(otherCollection) {
+        for (let item of otherCollection) {
+          this.add(item.sql, item.alias);
+        }
       },
       flattened() {
         const args = [];
@@ -207,7 +250,7 @@ function selectStatement() {
       groupBys.push(sql);
     },
     addWhereClause(sql) {
-      whereClause = { sql };
+      whereClause = sql;
     },
     toSql() {
       const parts = [];
@@ -218,7 +261,7 @@ function selectStatement() {
         parts.push(joinCollection.toSql());
       }
       if (whereClause) {
-        parts.push("WHERE " + whereClause.sql);
+        parts.push("WHERE " + whereClause.toSql());
       }
       if (groupBys.length) {
         parts.push("GROUP BY " + groupBys.map((groupBy) => groupBy.toSql()).join(","));
@@ -271,11 +314,43 @@ function createValue(jsonProp, value) {
     }
   };
 }
-function createWhereClause(sql) {
+function createWhereClause(builderResult) {
   return {
     type: 3 /* WHERE */,
-    [toSql](statement) {
-      statement.addWhereClause(sql);
+    [toSql](statement, ctx) {
+      statement.addWhereClause(builderResult.build(ctx));
+    }
+  };
+}
+function createWhereBuilder() {
+  let items = [];
+  return {
+    and(name, comparison, value) {
+      items.push({
+        type: "and",
+        name,
+        value,
+        comparison
+      });
+    },
+    or(name, comparison, value) {
+      items.push({
+        type: "or",
+        name,
+        value,
+        comparison
+      });
+    },
+    build(ctx) {
+      return items.reduce((acc, item) => {
+        if (acc) {
+          const op = item.type === "and" ? and : or;
+          acc = op(acc, compare(tableField(ctx.tableAlias, item.name), item.comparison, rawValue(item.value)));
+        } else {
+          acc = compare(tableField(ctx.tableAlias, item.name), item.comparison, rawValue(item.value));
+        }
+        return acc;
+      }, null);
     }
   };
 }
@@ -285,6 +360,9 @@ function createTableSource(fieldName, fn) {
   const hasSubRelations = () => children.some((child) => child.type === 0 /* TABLE */);
   const callToSqlForChilds = (statement, ctx) => {
     children.forEach((child) => child[toSql](statement, ctx));
+  };
+  const guessForeignKey = (ctx) => {
+    return `${ctx.table.toLowerCase()}_id`;
   };
   const instance = {
     type: 0 /* TABLE */,
@@ -297,8 +375,10 @@ function createTableSource(fieldName, fn) {
       alias = jsonProp;
       return this;
     },
-    where(sql) {
-      children.push(createWhereClause(sql));
+    where(fn2) {
+      const builder = createWhereBuilder();
+      fn2(builder);
+      children.push(createWhereClause(builder));
       return this;
     },
     targetTable(name) {
@@ -320,32 +400,35 @@ function createTableSource(fieldName, fn) {
       if (ctx.table) {
         const alias2 = ctx.genTableAlias();
         const subCtx = ctx.sub();
-        subCtx.table = alias2;
-        const a = tableField(alias2, `${ctx.table.toLowerCase()}_id`);
-        const b = tableField(ctx.table, "id");
+        subCtx.tableAlias = alias2;
+        subCtx.table = table;
+        const a = tableField(alias2, guessForeignKey(ctx));
+        const b = tableField(ctx.tableAlias, "id");
         if (hasSubRelations()) {
           const derivedJoinTable = selectStatement();
           derivedJoinTable.source(tableRef(table), alias2);
           callToSqlForChilds(derivedJoinTable, subCtx);
-          derivedJoinTable.addWhereClause(`${a}=${b}`);
+          derivedJoinTable.addWhereClause(compare(a, "=", b));
           const derivedAlias = ctx.genTableAlias();
-          statement.joins.add(JoinType.LEFT_JOIN_NATURAL, derivedTable(derivedJoinTable, derivedAlias), rawValue(1), rawValue(1));
+          statement.joins.add(JoinType.LEFT_JOIN_NATURAL, derivedTable(derivedJoinTable, derivedAlias), identifier.true);
           statement.fields.add(funcCall("json_agg", tableAllFields(derivedAlias)), fieldName);
         } else {
-          statement.joins.add(JoinType.LEFT_JOIN, tableRefWithAlias(tableRef(table), alias2), a, b);
+          statement.joins.add(JoinType.LEFT_JOIN, tableRefWithAlias(tableRef(table), alias2), compare(a, "=", b));
           const subStatement = selectStatement();
           callToSqlForChilds(subStatement, subCtx);
-          statement.fields.add(funcCall("json_agg", ...subStatement.fields.flattened()), fieldName);
+          subStatement.fields.jsonAgg(fieldName);
+          statement.fields.append(subStatement.fields);
         }
-        statement.addGroupBy(tableField(ctx.table, "id"));
+        statement.addGroupBy(tableField(ctx.tableAlias, "id"));
       } else {
         const alias2 = ctx.genTableAlias();
         const subCtx = ctx.sub();
-        subCtx.table = alias2;
+        subCtx.table = table;
+        subCtx.tableAlias = alias2;
         const subSelect = selectStatement();
         subSelect.source(tableRef(table), alias2);
         callToSqlForChilds(subSelect, subCtx);
-        subSelect.fields.jsonAgg();
+        subSelect.fields.json();
         statement.fields.add(subquery(subSelect), fieldName);
       }
     }
@@ -364,9 +447,10 @@ function graphQuery() {
     toSql() {
       const statement = selectStatement();
       const ctx = createContext();
-      const jsonSelect = selectStatement();
-      sources[0][toSql](jsonSelect, ctx);
-      statement.fields.add(funcCall("json_build_object", ...jsonSelect.fields.flattened()));
+      sources.forEach((source) => {
+        source[toSql](statement, ctx);
+      });
+      statement.fields.json();
       return statement.toSql();
     }
   };
@@ -374,7 +458,16 @@ function graphQuery() {
 var graph = graphQuery();
 graph.source("User", (user) => {
   user.field("email");
+  user.where((b) => {
+    b.and("email", "=", "bla");
+  });
   user.many("Tree", (tree) => {
+    tree.where((b) => {
+      b.and("creation_date", "=", "bla");
+    });
+    tree.many("Order", (order) => {
+      order.field("id");
+    });
     tree.field("name").alias("tree_name");
   });
 });

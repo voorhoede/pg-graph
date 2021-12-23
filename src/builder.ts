@@ -9,6 +9,9 @@ export interface Group extends ReturnType<typeof group> { }
 export interface FuncCall extends ReturnType<typeof funcCall> { }
 export interface Subquery extends ReturnType<typeof subquery> { }
 export interface TableRefWithAlias extends ReturnType<typeof tableRefWithAlias> { }
+export interface Compare extends ReturnType<typeof compare> { }
+export interface And extends ReturnType<typeof and> { }
+export interface Or extends ReturnType<typeof or> { }
 
 export type SqlNode =
     TableRef |
@@ -21,7 +24,39 @@ export type SqlNode =
     FuncCall |
     SelectStatement |
     DerivedTable |
-    Subquery;
+    Subquery |
+    Or |
+    And |
+    Compare;
+
+export function and(left: SqlNode, right: SqlNode) {
+    return {
+        type: 'and' as const,
+        toSql() {
+            return '(' + left.toSql() + ' AND ' + right.toSql() + ')'
+        }
+    }
+}
+
+export function or(left: SqlNode, right: SqlNode) {
+    return {
+        type: 'or' as const,
+        toSql() {
+            return '(' + left.toSql() + ' OR ' + right.toSql() + ')'
+        }
+    }
+}
+
+export type ValidComparisonSigns = '=' | '!=' | '>' | '<' | '>=' | '<='
+
+export function compare(left: SqlNode, comparison: ValidComparisonSigns, right: SqlNode) {
+    return {
+        type: 'comparison' as const,
+        toSql() {
+            return left.toSql() + ' ' + comparison + ' ' + right.toSql()
+        }
+    }
+}
 
 export function identifier(value: string) {
     return {
@@ -32,6 +67,9 @@ export function identifier(value: string) {
         }
     }
 }
+
+identifier.true = identifier('true')
+identifier.false = identifier('true')
 
 export function funcCall(name: string, ...args: Array<SqlNode>) {
     return {
@@ -159,12 +197,7 @@ export function selectStatement() {
     type Join = {
         type: JoinType
         src: DerivedTable | TableRef | TableRefWithAlias
-        a: SqlNode
-        b: SqlNode
-    }
-
-    type WhereClause = {
-        sql: string
+        compare: Compare | Identifier | RawValue
     }
 
     function createJoinCollection() {
@@ -173,12 +206,12 @@ export function selectStatement() {
             get length() {
                 return joins.length
             },
-            add(type: JoinType, src: DerivedTable | TableRef | TableRefWithAlias, a: SqlNode, b: SqlNode) {
-                joins.push({ type, src, a, b })
+            add(type: JoinType, src: DerivedTable | TableRef | TableRefWithAlias, compare: Compare | Identifier | RawValue) {
+                joins.push({ type, src, compare })
             },
             toSql() {
                 return joins.map(join => {
-                    return `${join.type} ${join.src.toSql()} ON ${join.a.toSql()} = ${join.b.toSql()}`
+                    return `${join.type} ${join.src.toSql()} ON ${join.compare.toSql()}`
                 }).join(' ')
             },
             [Symbol.iterator]() {
@@ -197,12 +230,6 @@ export function selectStatement() {
                 fields.push({ sql, alias })
             },
             toSql(): string {
-                // if (fields.length === 0) {
-                //     return rawValue('{}', 'json').toSql()
-                // }
-
-                //return funcCall('json_build_object', ...this.flattened()).toSql()
-
                 if (!fields.length) {
                     return '1'
                 }
@@ -211,11 +238,19 @@ export function selectStatement() {
                     return field.sql.toSql() + (field.alias ? ` as ${field.alias}` : '')
                 }).join(', ')
             },
-            json() {
-                fields = [{ sql: funcCall('json_build_object', ...this.flattened()) }]
+            get(index: number) {
+                return fields[index]
             },
-            jsonAgg() {
-                fields = [{ sql: funcCall('json_agg', funcCall('json_build_object', ...this.flattened())) }]
+            json(alias?: string) {
+                fields = [{ sql: funcCall('json_build_object', ...this.flattened()), alias }]
+            },
+            jsonAgg(alias?: string) {
+                fields = [{ sql: funcCall('json_agg', funcCall('json_build_object', ...this.flattened())), alias }]
+            },
+            append(otherCollection) {
+                for (let item of otherCollection) {
+                    this.add(item.sql, item.alias)
+                }
             },
             flattened() {
                 const args: Array<SqlNode> = [];
@@ -236,7 +271,7 @@ export function selectStatement() {
     const joinCollection = createJoinCollection()
     const groupBys: SqlNode[] = [];
 
-    let whereClause: WhereClause;
+    let whereClause: SqlNode;
     let source: TableRef | TableRefWithAlias | undefined
 
     return {
@@ -253,8 +288,8 @@ export function selectStatement() {
         addGroupBy(sql: SqlNode) {
             groupBys.push(sql)
         },
-        addWhereClause(sql) {
-            whereClause = { sql }
+        addWhereClause(sql: SqlNode) {
+            whereClause = sql
         },
         toSql() {
             const parts = []
@@ -265,7 +300,7 @@ export function selectStatement() {
                 parts.push(joinCollection.toSql())
             }
             if (whereClause) {
-                parts.push('WHERE ' + whereClause.sql)
+                parts.push('WHERE ' + whereClause.toSql())
             }
             if (groupBys.length) {
                 parts.push('GROUP BY ' + groupBys.map(groupBy => groupBy.toSql()).join(','))
