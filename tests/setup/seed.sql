@@ -17,6 +17,10 @@ CREATE TABLE IF NOT EXISTS comment (
 );
 
 BEGIN;
+DELETE FROM comment;
+DELETE FROM blog;
+DELETE FROM "user";
+
 INSERT INTO "user" (name) VALUES ('Remco');
 
 INSERT INTO blog (name, posted_by) VALUES ('Blog about cats', currval('user_id_seq'));

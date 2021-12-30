@@ -5,7 +5,9 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
+    "pretest": "npm run build && docker-compose --log-level ERROR -f ./tests/setup/docker-compose.yml up -d && node ./tests/setup/seed.js",
     "test": "tape ./tests/*.js",
+    "posttest": "cd ./tests/setup && docker-compose down && echo 'done'",
     "build": "tsc",
     "prepublish": "tsc",
     "start": "ts-node src/index.ts"

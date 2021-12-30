@@ -11,8 +11,6 @@ async function connect() {
 test('should be able to get all user names', async (t) => {
     const client = await connect()
 
-    t.plan(1);
-
     const query = graphQuery()
 
     query.source('user', user => {
@@ -29,14 +27,12 @@ test('should be able to get all user names', async (t) => {
     })
 
     await client.end()
+
+    t.end()
 })
 
 test('should be able to get all user blogs', async (t) => {
-    const client = new pg.Client('postgres://postgres@localhost:5433')
-
-    await client.connect()
-
-    t.plan(1);
+    const client = await connect()
 
     const query = graphQuery()
 
@@ -69,13 +65,15 @@ test('should be able to get all user blogs', async (t) => {
             }
         ]
     })
+
+    await client.end()
+
+    t.end()
 })
 
 
 test('should be able to get all user comments', async (t) => {
     const client = await connect()
-
-    t.plan(1);
 
     const query = graphQuery()
 
@@ -130,4 +128,6 @@ test('should be able to get all user comments', async (t) => {
     })
 
     await client.end()
+
+    t.end()
 })
