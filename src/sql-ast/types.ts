@@ -1,4 +1,4 @@
-export type ValidComparisonSign = '=' | '!=' | '>' | '<' | '>=' | '<=' | 'IS' | 'IS NOT'
+export type ValidComparisonSign = '=' | '!=' | '>' | '<' | '>=' | '<=' | 'IS' | 'IS NOT' | 'IN' | 'NOT IN'
 
 export enum JoinType {
     INNER_JOIN = 'INNER_JOIN',

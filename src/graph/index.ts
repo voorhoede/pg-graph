@@ -1,15 +1,19 @@
 import { createGraphBuildContext, createGraphToSqlContext, GraphBuildContext } from "./context";
-import { createTableSource, TableSourceBuilder, TableSource } from "./table-source";
+import { createRootTabularSource, TabularSourceBuilder, TabularSource } from "./tabular-source";
 import { n } from "../sql-ast";
 import { toSqlKey } from "./types";
 
 export function graphQuery() {
-    const sources: TableSource[] = [];
+    const sources: TabularSource[] = [];
     const graphBuildContext: GraphBuildContext = createGraphBuildContext()
 
     return {
-        source(name: string, fn: TableSourceBuilder) {
-            const item = createTableSource(graphBuildContext, name, undefined, fn);
+        source(name: string, builder: TabularSourceBuilder) {
+            const item = createRootTabularSource({
+                ctx: graphBuildContext,
+                name: name,
+                builder
+            });
             sources.push(item)
             return item;
         },

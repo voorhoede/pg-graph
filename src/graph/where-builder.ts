@@ -23,25 +23,25 @@ export function createWhereBuilder(ctx: GraphBuildContext): Output {
         let resultNode: nodeTypes.Compare | nodeTypes.And | nodeTypes.Or | null = null
 
         const chain: WhereBuilderChain = {
-            and(nameOrBuilderHandler: ((b: WhereBuilder) => void) | string, comparison?: ValidComparisonSign, value?: string): WhereBuilderChain {
-                if (typeof nameOrBuilderHandler === 'string') {
+            and(nameOrBuilderHandler: ((b: WhereBuilder) => void) | string, comparison?: ValidComparisonSign, value?: any): WhereBuilderChain {
+                if (typeof nameOrBuilderHandler === 'string') { // name, comparison, value
                     addOp('and', nameOrBuilderHandler, comparison, value)
-                } else {
+                } else { // subbuilder
                     addGroup('and', nameOrBuilderHandler)
                 }
                 return chain
             },
-            or(nameOrBuilderHandler: ((b: WhereBuilder) => void) | string, comparison?: ValidComparisonSign, value?: string): WhereBuilderChain {
-                if (typeof nameOrBuilderHandler === 'string') {
+            or(nameOrBuilderHandler: ((b: WhereBuilder) => void) | string, comparison?: ValidComparisonSign, value?: any): WhereBuilderChain {
+                if (typeof nameOrBuilderHandler === 'string') { // name, comparison, value
                     addOp('or', nameOrBuilderHandler, comparison, value)
-                } else {
+                } else { // subbuilder
                     addGroup('or', nameOrBuilderHandler)
                 }
                 return chain
             }
         }
 
-        function addOp(op: LogicalOpType, name: string, comparison: ValidComparisonSign, value: string) {
+        function addOp(op: LogicalOpType, name: string, comparison: ValidComparisonSign, value: any) {
             const field = n.tableField('', name)
             fields.push(field)
 
@@ -69,6 +69,7 @@ export function createWhereBuilder(ctx: GraphBuildContext): Output {
                     return resultNode
                 },
                 apply(ctx: GraphToSqlContext) {
+                    // I don't like this. Basically all fields without table references should point to the parent table
                     fields.forEach(field => {
                         field.table = ctx.tableAlias
                     })
