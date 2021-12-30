@@ -1,9 +1,9 @@
 import * as n from "./nodes";
 
 export interface TableRef extends ReturnType<typeof n.tableRef> { }
-export interface TableAllFieldsRef extends ReturnType<typeof n.tableAllFields> { }
+export interface TableAllFieldsRef extends ReturnType<typeof n.allFields> { }
 export interface RawValue extends ReturnType<typeof n.rawValue> { }
-export interface TableFieldRef extends ReturnType<typeof n.tableField> { }
+export interface TableFieldRef extends ReturnType<typeof n.field> { }
 export interface Identifier extends ReturnType<typeof n.identifier> { }
 export interface SelectStatement extends ReturnType<typeof n.selectStatement> { }
 export interface DerivedTable extends ReturnType<typeof n.derivedTable> { }
@@ -17,6 +17,7 @@ export interface Or extends ReturnType<typeof n.or> { }
 export interface Where extends ReturnType<typeof n.where> { }
 export interface Cte extends ReturnType<typeof n.cte> { }
 export interface WindowFilter extends ReturnType<typeof n.windowFilter> { }
+export interface InList extends ReturnType<typeof n.inList> { }
 
 export type SqlNode =
     TableRef |
@@ -35,4 +36,9 @@ export type SqlNode =
     Compare |
     Where |
     Cte |
-    WindowFilter
+    WindowFilter |
+    InList
+
+export function isSqlNode(n: any): n is SqlNode {
+    return n.type && n.toSql
+}

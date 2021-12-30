@@ -9,8 +9,7 @@ export function createWhereClause(builderResult: WhereBuilderResult): Where {
     return {
         type: GraphItemTypes.WHERE,
 
-        [toSqlKey](statement, ctx) {
-            builderResult.apply(ctx)
+        [toSqlKey](statement) {
             statement.addWhereClause(builderResult.node)
         }
     }

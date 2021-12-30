@@ -1,6 +1,10 @@
 import * as nodeTypes from './node-types'
 import { JoinType, ValidComparisonSign } from "./types"
 
+export type NodeToSqlContext = {
+    table?: string
+}
+
 function formatCast(name?: string) {
     return name ? '::' + name : ''
 }
@@ -8,8 +12,8 @@ function formatCast(name?: string) {
 export function windowFilter(node: nodeTypes.FuncCall, where: nodeTypes.Where) {
     return {
         type: 'windowFilter' as const,
-        toSql() {
-            return `${node.toSql()} FILTER (${where.toSql()})`
+        toSql(ctx: NodeToSqlContext) {
+            return `${node.toSql(ctx)} FILTER (${where.toSql(ctx)})`
         },
     }
 }
@@ -17,7 +21,10 @@ export function windowFilter(node: nodeTypes.FuncCall, where: nodeTypes.Where) {
 export function cte(name: string, node: nodeTypes.SelectStatement) {
     return {
         type: 'cte' as const,
-        toSql() {
+        assignTableOwner(newOwner: string) {
+            node.assignTableOwner(newOwner)
+        },
+        toSql(_ctx: NodeToSqlContext) {
             return `WITH "${name}" AS ( ${node.toSql()} )`
         },
     }
@@ -26,8 +33,8 @@ export function cte(name: string, node: nodeTypes.SelectStatement) {
 export function where(node: nodeTypes.SqlNode) {
     return {
         type: 'where' as const,
-        toSql() {
-            return 'WHERE ' + node.toSql()
+        toSql(ctx: NodeToSqlContext) {
+            return 'WHERE ' + node.toSql(ctx)
         },
         and(other: nodeTypes.SqlNode) {
             return and(this, other)
@@ -41,8 +48,8 @@ export function where(node: nodeTypes.SqlNode) {
 export function and(left: nodeTypes.SqlNode, right: nodeTypes.SqlNode) {
     return {
         type: 'and' as const,
-        toSql() {
-            return left.toSql() + ' AND ' + right.toSql()
+        toSql(ctx: NodeToSqlContext) {
+            return left.toSql(ctx) + ' AND ' + right.toSql(ctx)
         },
         and(other: nodeTypes.SqlNode) {
             return and(this, other)
@@ -56,8 +63,8 @@ export function and(left: nodeTypes.SqlNode, right: nodeTypes.SqlNode) {
 export function or(left: nodeTypes.SqlNode, right: nodeTypes.SqlNode) {
     return {
         type: 'or' as const,
-        toSql() {
-            return left.toSql() + ' OR ' + right.toSql()
+        toSql(ctx: NodeToSqlContext) {
+            return left.toSql(ctx) + ' OR ' + right.toSql(ctx)
         },
         and(other: nodeTypes.SqlNode) {
             return and(this, other)
@@ -68,11 +75,20 @@ export function or(left: nodeTypes.SqlNode, right: nodeTypes.SqlNode) {
     }
 }
 
+export function inList(...nodes: nodeTypes.SqlNode[]) {
+    return {
+        type: 'inList' as const,
+        toSql(ctx: NodeToSqlContext) {
+            return '(' + nodes.map(node => node.toSql(ctx)).join(', ') + ')'
+        },
+    }
+}
+
 export function compare(left: nodeTypes.SqlNode, comparison: ValidComparisonSign, right: nodeTypes.SqlNode) {
     return {
         type: 'comparison' as const,
-        toSql() {
-            return left.toSql() + ' ' + comparison + ' ' + right.toSql()
+        toSql(ctx: NodeToSqlContext) {
+            return left.toSql(ctx) + ' ' + comparison + ' ' + right.toSql(ctx)
         },
         and(other: nodeTypes.SqlNode) {
             return and(this, other)
@@ -86,8 +102,7 @@ export function compare(left: nodeTypes.SqlNode, comparison: ValidComparisonSign
 export function identifier(value: string) {
     return {
         type: 'identifier' as const,
-        value,
-        toSql() {
+        toSql(_ctx: NodeToSqlContext) {
             return value
         }
     }
@@ -100,34 +115,30 @@ identifier.null = identifier('NULL')
 export function funcCall(name: string, ...args: Array<nodeTypes.SqlNode>) {
     return {
         type: 'funcCall' as const,
-        name,
-        args,
-        toSql() {
-            const argsToStr = args.map(arg => arg.toSql()).join(', ')
-            return `${this.name}(${argsToStr})`
+        toSql(ctx: NodeToSqlContext) {
+            const argsToStr = args.map(arg => arg.toSql(ctx)).join(', ')
+            return `${name}(${argsToStr})`
         }
     }
 }
 
-export function rawValue(value: any, cast?: string) {
+export function rawValue(value: unknown, cast?: string) {
     return {
         type: 'rawValue' as const,
-        value,
-        cast,
-        toSql() {
-            let formattedValue = this.value;
+        toSql(_ctx: NodeToSqlContext) {
+            let formattedValue = value;
             switch (typeof value) {
                 case 'string': {
-                    formattedValue = `'${this.value}'` //TODO escape
+                    formattedValue = `'${value.replace(/'/g, "\\'")}'`
                     break;
                 }
                 case 'number': {
-                    formattedValue = this.value
+                    formattedValue = value
                     break;
                 }
             }
 
-            return `${formattedValue}${formatCast(this.cast)}`
+            return `${formattedValue}${formatCast(cast)}`
         }
     }
 }
@@ -135,15 +146,14 @@ export function rawValue(value: any, cast?: string) {
 export function tableRef(name: string) {
     return {
         type: 'tableRef' as const,
-        name,
-        field(field: string) {
-            return tableField(this.name, field)
+        field(fieldName: string, cast?: string) {
+            return field(fieldName, name, cast)
         },
         allFields() {
-            return tableAllFields(this.name)
+            return allFields(name)
         },
-        toSql() {
-            return `"${this.name}"`
+        toSql(_ctx: NodeToSqlContext) {
+            return `"${name}"`
         }
     }
 }
@@ -151,32 +161,30 @@ export function tableRef(name: string) {
 export function tableRefWithAlias(ref: nodeTypes.TableRef, alias: string) {
     return {
         type: 'tableRefWithAlias' as const,
-        ref,
-        alias,
-        toSql() {
-            return this.ref.toSql() + ' ' + this.alias
+        toSql(ctx: NodeToSqlContext) {
+            return ref.toSql(ctx) + ' ' + alias
         }
     }
 }
 
-export function tableAllFields(table: string) {
+export function allFields(table?: string) {
     return {
         type: 'tableAllFieldsRef' as const,
-        table,
-        toSql() {
-            return `"${this.table}".*`
+        toSql(ctx: NodeToSqlContext) {
+            const resolvedTable = table ?? ctx.table
+            return resolvedTable ? `"${resolvedTable}".*` : '*'
         }
     }
 }
 
-export function tableField(table: string, field: string, cast?: string) {
+export function field(field: string, table?: string, cast?: string) {
     return {
         type: 'tableFieldRef' as const,
-        table,
-        field,
-        cast,
-        toSql() {
-            return `"${this.table}".${this.field}${formatCast(this.cast)}`
+        toSql(ctx: NodeToSqlContext) {
+            const resolvedTable = table ?? ctx.table
+            return resolvedTable
+                ? `"${resolvedTable}".${field}${formatCast(cast)}`
+                : `${field}${formatCast(cast)}`
         }
     }
 }
@@ -184,9 +192,8 @@ export function tableField(table: string, field: string, cast?: string) {
 export function group(node: nodeTypes.SqlNode) {
     return {
         type: 'group' as const,
-        node,
-        toSql() {
-            return '(' + this.node.toSql() + ')'
+        toSql(ctx: NodeToSqlContext) {
+            return '(' + node.toSql(ctx) + ')'
         }
     }
 }
@@ -194,9 +201,8 @@ export function group(node: nodeTypes.SqlNode) {
 export function subquery(select: nodeTypes.SelectStatement) {
     return {
         type: 'subquery' as const,
-        select,
-        toSql() {
-            return '(' + this.select.toSql() + ') '
+        toSql(_ctx: NodeToSqlContext) {
+            return '(' + select.toSql() + ') '
         }
     }
 }
@@ -204,15 +210,22 @@ export function subquery(select: nodeTypes.SelectStatement) {
 export function derivedTable(select: nodeTypes.SelectStatement, alias: string) {
     return {
         type: 'derivedTable' as const,
-        select,
-        alias,
-        toSql() {
-            return '(' + this.select.toSql() + ') ' + this.alias
+        toSql(_ctx: NodeToSqlContext) {
+            return '(' + select.toSql() + ') ' + alias
         }
     }
 }
 
 export function selectStatement() {
+    const fieldCollection = createFieldCollection()
+    const joinCollection = createJoinCollection()
+    const ctes: nodeTypes.Cte[] = [];
+    const groupBys: nodeTypes.SqlNode[] = [];
+    let mainTableSource: string | undefined;
+    const sources: Array<nodeTypes.TableRef | nodeTypes.TableRefWithAlias> = []
+
+    let whereClauseChain: nodeTypes.Where | nodeTypes.And | nodeTypes.Or | null = null;
+
     type Join = {
         type: JoinType
         src: nodeTypes.DerivedTable | nodeTypes.TableRef | nodeTypes.TableRefWithAlias
@@ -228,9 +241,9 @@ export function selectStatement() {
             add(type: JoinType, src: nodeTypes.DerivedTable | nodeTypes.TableRef | nodeTypes.TableRefWithAlias, compare: nodeTypes.Compare | nodeTypes.Identifier | nodeTypes.RawValue) {
                 joins.push({ type, src, compare })
             },
-            toSql() {
+            toSql(ctx: NodeToSqlContext) {
                 return joins.map(join => {
-                    return `${join.type} ${join.src.toSql()} ON ${join.compare.toSql()}`
+                    return `${join.type} ${join.src.toSql(ctx)} ON ${join.compare.toSql(ctx)}`
                 }).join(' ')
             },
             [Symbol.iterator]() {
@@ -267,13 +280,13 @@ export function selectStatement() {
             add(sql: nodeTypes.SqlNode, alias?: string) {
                 fields.push({ sql, alias })
             },
-            toSql(): string {
+            toSql(ctx: NodeToSqlContext): string {
                 if (!fields.length) {
                     return '1'
                 }
 
                 return fields.map(field => {
-                    return field.sql.toSql() + (field.alias ? ` as ${field.alias}` : '')
+                    return field.sql.toSql(ctx) + (field.alias ? ` as ${field.alias}` : '')
                 }).join(', ')
             },
             get(index: number) {
@@ -312,16 +325,9 @@ export function selectStatement() {
         }
     }
 
-    const fieldCollection = createFieldCollection()
-    const joinCollection = createJoinCollection()
-    const ctes: nodeTypes.Cte[] = [];
-    const groupBys: nodeTypes.SqlNode[] = [];
-
-    let whereClauseChain: nodeTypes.Where | nodeTypes.And | nodeTypes.Or | null = null;
-    let source: nodeTypes.TableRef | nodeTypes.TableRefWithAlias | undefined
-
     return {
         type: 'selectStatement' as const,
+        assignTableOwner(_table: string) { },
         get fields() {
             return fieldCollection
         },
@@ -334,30 +340,37 @@ export function selectStatement() {
         addWhereClause(node: nodeTypes.SqlNode) {
             whereClauseChain = whereClauseChain ? whereClauseChain.and(node) : where(node)
         },
-        source(tableOrView: nodeTypes.TableRef, alias?: string) {
-            source = alias ? tableRefWithAlias(tableOrView, alias) : tableOrView
+        source(tableName: string, alias?: string) {
+            mainTableSource = alias ?? tableName //anonymous fields will be resolved to the main table source
+
+            const ref = tableRef(tableName)
+            sources.push(alias ? tableRefWithAlias(ref, alias) : ref)
         },
         addGroupBy(sql: nodeTypes.SqlNode) {
             groupBys.push(sql)
         },
         toSql() {
+            const ctx: NodeToSqlContext = {
+                table: mainTableSource
+            };
+
             const parts = []
-            if (source) {
-                parts.push('FROM ' + source.toSql())
+            if (sources.length) {
+                parts.push('FROM ' + sources.map(source => source.toSql(ctx)).join(','))
             }
             if (joinCollection.length) {
-                parts.push(joinCollection.toSql())
+                parts.push(joinCollection.toSql(ctx))
             }
             if (whereClauseChain) {
-                parts.push(whereClauseChain.toSql())
+                parts.push(whereClauseChain.toSql(ctx))
             }
             if (groupBys.length) {
-                parts.push('GROUP BY ' + groupBys.map(groupBy => groupBy.toSql()).join(','))
+                parts.push('GROUP BY ' + groupBys.map(groupBy => groupBy.toSql(ctx)).join(','))
             }
 
-            const cteSql = ctes.map(cte => cte.toSql()).join('\n')
+            const cteSql = ctes.map(cte => cte.toSql(ctx)).join('\n')
 
-            return cteSql + `SELECT ${fieldCollection.toSql()}${parts.length ? ' ' + parts.join(' ') : ''}`
+            return cteSql + `SELECT ${fieldCollection.toSql(ctx)}${parts.length ? ' ' + parts.join(' ') : ''}`
         },
 
     }

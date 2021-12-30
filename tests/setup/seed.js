@@ -2,8 +2,6 @@ const pg = require('pg')
 const fs = require('fs')
 const path = require('path')
 
-const conn = new pg.Client('postgres://postgres@localhost:5433')
-
 async function timeout(ms) {
     return new Promise((resolve) => {
         setTimeout(resolve, ms)
@@ -11,18 +9,20 @@ async function timeout(ms) {
 }
 
 async function attemptConnect() {
+    const conn = new pg.Client('postgres://postgres@localhost:5433')
     try {
         await conn.connect()
+        return conn
     }
     catch(e) {
-        await timeout(500)
+        console.log('db not ready...re-attempt in 1 second')
+        await timeout(1000)
         return attemptConnect()
     }
 }
 
 ;(async function main() {
-
-    await attemptConnect()
+    const conn = await attemptConnect()
 
     const sql = await fs.promises.readFile(path.join(__dirname, './seed.sql'), 'utf8')
 

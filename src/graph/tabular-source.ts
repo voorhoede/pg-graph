@@ -52,7 +52,7 @@ export function createRootTabularSource(options: TabularSourceOptions) {
 
         // we create a cte that uses json_build_object to build the result
         const cteSelect = n.selectStatement()
-        cteSelect.source(n.tableRef(targetTable), alias)
+        cteSelect.source(targetTable, alias)
 
         // apply all items to the cteSelect
         itemsToSql(items, cteSelect, subCtx)
@@ -65,8 +65,8 @@ export function createRootTabularSource(options: TabularSourceOptions) {
         // we use a json_agg with the result of the cte to make sure that we only get one row
         const cteName = `${name}Cte`
         const subSelect = n.selectStatement()
-        subSelect.source(n.tableRef(cteName))
-        subSelect.fields.add(n.funcCall('json_agg', n.tableField(cteName, 'data')))
+        subSelect.source(cteName)
+        subSelect.fields.add(n.funcCall('json_agg', n.field('data', cteName)))
 
         statement.fields.add(n.subquery(subSelect), name)
     })
@@ -88,17 +88,17 @@ export function createNestedTabularSource(options: TabularSourceOptions, relType
             // "childTable.parent_id" = "parentTable".id
 
             comparison = n.compare(
-                n.tableField(alias, foreignKey ?? guessForeignKey(ctx.table)),
+                n.field(foreignKey ?? guessForeignKey(ctx.table), alias),
                 '=',
-                n.tableField(ctx.tableAlias, 'id')
+                n.field('id', ctx.tableAlias)
             )
         } else if (relType === 'one') {
             // "parentTable.child_id" = "childTable".id
 
             comparison = n.compare(
-                n.tableField(ctx.tableAlias, guessForeignKey(targetTable)),
+                n.field(guessForeignKey(targetTable), ctx.tableAlias),
                 '=',
-                n.tableField(targetTable, 'id')
+                n.field('id', targetTable)
             )
         } else {
             (relType as never)
@@ -106,7 +106,7 @@ export function createNestedTabularSource(options: TabularSourceOptions, relType
 
         if (hasSubRelations(items)) {
             const derivedJoinTable = n.selectStatement()
-            derivedJoinTable.source(n.tableRef(targetTable), alias)
+            derivedJoinTable.source(targetTable, alias)
 
             itemsToSql(items, derivedJoinTable, subCtx)
 
@@ -116,7 +116,7 @@ export function createNestedTabularSource(options: TabularSourceOptions, relType
 
             statement.joins.add(JoinType.LEFT_JOIN_LATERAL, n.derivedTable(derivedJoinTable, derivedAlias), n.identifier.true)
 
-            statement.fields.add(n.funcCall('json_agg', n.tableAllFields(derivedAlias)), fieldName)
+            statement.fields.add(n.funcCall('json_agg', n.allFields(derivedAlias)), fieldName)
         } else {
             /* 
                 there are no sub relations so the fields and join can be directly added to 'statement'
@@ -129,12 +129,12 @@ export function createNestedTabularSource(options: TabularSourceOptions, relType
 
             itemsToSql(items, subStatement, subCtx)
 
-            subStatement.fields.convertToJsonAgg(n.tableField(alias, 'id'), fieldName)
+            subStatement.fields.convertToJsonAgg(n.field('id', alias), fieldName)
 
             statement.fields.append(subStatement.fields)
         }
 
-        statement.addGroupBy(n.tableField(ctx.tableAlias, 'id'))
+        statement.addGroupBy(n.field('id', ctx.tableAlias))
     })
 }
 

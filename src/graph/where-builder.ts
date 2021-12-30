@@ -1,51 +1,66 @@
 
 import { ValidComparisonSign, nodeTypes, n } from "../sql-ast"
-import { GraphBuildContext, GraphToSqlContext } from "./context"
+import { isSqlNode, SqlNode } from "../sql-ast/node-types"
+import { GraphBuildContext } from "./context"
 
 export type LogicalOpType = 'and' | 'or'
 
 export interface WhereBuilderChain {
     and(f: (b: WhereBuilder) => void): WhereBuilderChain,
-    and(name: string, comparison: ValidComparisonSign, value: string): WhereBuilderChain,
+    and(name: string, comparison: ValidComparisonSign, value: unknown): WhereBuilderChain,
     or(f: (b: WhereBuilder) => void): WhereBuilderChain,
-    or(name: string, comparison: ValidComparisonSign, value: string): WhereBuilderChain,
+    or(name: string, comparison: ValidComparisonSign, value: unknown): WhereBuilderChain,
 }
 
-export type WhereBuilder = (name: string, comparison: ValidComparisonSign, value: string) => WhereBuilderChain
-export type WhereBuilderResult = { apply(ctx: GraphToSqlContext), get node(): nodeTypes.SqlNode }
+export type WhereBuilder = (name: string, comparison: ValidComparisonSign, value: unknown) => WhereBuilderChain
+export type WhereBuilderResult = { get node(): nodeTypes.SqlNode }
 
 type Output = { builder: WhereBuilder, result: WhereBuilderResult };
 
+/**
+ * Creates a where builder which allows you to construct a complex 'where statement' containing multiple AND / OR and even nested combinations
+ * @param ctx 
+ * @returns 
+ */
 export function createWhereBuilder(ctx: GraphBuildContext): Output {
-    const fields: nodeTypes.TableFieldRef[] = []
-
     function createBuilderGroup(groupOp: LogicalOpType): Output {
         let resultNode: nodeTypes.Compare | nodeTypes.And | nodeTypes.Or | null = null
 
-        const chain: WhereBuilderChain = {
-            and(nameOrBuilderHandler: ((b: WhereBuilder) => void) | string, comparison?: ValidComparisonSign, value?: any): WhereBuilderChain {
-                if (typeof nameOrBuilderHandler === 'string') { // name, comparison, value
-                    addOp('and', nameOrBuilderHandler, comparison, value)
-                } else { // subbuilder
-                    addGroup('and', nameOrBuilderHandler)
-                }
-                return chain
-            },
-            or(nameOrBuilderHandler: ((b: WhereBuilder) => void) | string, comparison?: ValidComparisonSign, value?: any): WhereBuilderChain {
-                if (typeof nameOrBuilderHandler === 'string') { // name, comparison, value
-                    addOp('or', nameOrBuilderHandler, comparison, value)
-                } else { // subbuilder
-                    addGroup('or', nameOrBuilderHandler)
-                }
-                return chain
+        const add = (op: LogicalOpType) => (nameOrBuilderHandler: ((b: WhereBuilder) => void) | string, comparison?: ValidComparisonSign, value?: unknown): WhereBuilderChain => {
+            if (typeof nameOrBuilderHandler === 'string') { // name, comparison, value
+                addOp(op, nameOrBuilderHandler, comparison, value)
+            } else { // subbuilder
+                addGroup(op, nameOrBuilderHandler)
             }
+            return chain
         }
 
-        function addOp(op: LogicalOpType, name: string, comparison: ValidComparisonSign, value: any) {
-            const field = n.tableField('', name)
-            fields.push(field)
+        const chain: WhereBuilderChain = {
+            and: add('and'),
+            or: add('or')
+        }
 
-            const node = n.compare(field, comparison, ctx.createPlaceholderForValue(value))
+        function createNodeForValue(value: unknown): SqlNode {
+            if (isSqlNode(value)) {
+                return value
+            }
+            return ctx.createPlaceholderForValue(value)
+        }
+
+        function addOp(op: LogicalOpType, name: string, comparison: ValidComparisonSign, value: unknown) {
+            let valueNode: SqlNode;
+
+            if ((comparison === 'IN' || comparison === 'NOT IN')) {
+                if (!Array.isArray(value)) {
+                    throw new Error('Unexpected value. For IN or NOT IN operators the value should be an array')
+                }
+
+                valueNode = n.inList(...value.map(createNodeForValue))
+            } else {
+                valueNode = createNodeForValue(value)
+            }
+
+            const node = n.compare(n.field(name), comparison, valueNode)
             if (!resultNode) {
                 resultNode = node
             } else {
@@ -60,7 +75,7 @@ export function createWhereBuilder(ctx: GraphBuildContext): Output {
         }
 
         return {
-            builder: (name: string, comparison: ValidComparisonSign, value: string) => {
+            builder: (name: string, comparison: ValidComparisonSign, value: unknown) => {
                 chain[groupOp](name, comparison, value)
                 return chain
             },
@@ -68,12 +83,6 @@ export function createWhereBuilder(ctx: GraphBuildContext): Output {
                 get node() {
                     return resultNode
                 },
-                apply(ctx: GraphToSqlContext) {
-                    // I don't like this. Basically all fields without table references should point to the parent table
-                    fields.forEach(field => {
-                        field.table = ctx.tableAlias
-                    })
-                }
             }
         }
     };
