@@ -22,7 +22,9 @@ export function createGraphBuildContext(): GraphBuildContext {
 export type GraphToSqlContext = {
     table?: string,
     tableAlias?: string,
-    sub(): GraphToSqlContext,
+    subRelationCount?: number,
+    depth: number,
+    createSubContext(): GraphToSqlContext,
     genTableAlias(): string,
 }
 
@@ -30,18 +32,18 @@ export function createGraphToSqlContext(): GraphToSqlContext {
     const aliasCreator = tableAliasCreator()
 
     const proto: GraphToSqlContext = {
+        depth: 0,
         genTableAlias() {
             return aliasCreator.next()
         },
-        sub() {
+        createSubContext() {
             const subContext: GraphToSqlContext = Object.create(proto)
-            subContext.table = null
-            subContext.tableAlias = null
+            subContext.depth = this.depth + 1
             return subContext
         }
     }
 
-    return proto.sub()
+    return proto.createSubContext()
 }
 
 function tableAliasCreator() {

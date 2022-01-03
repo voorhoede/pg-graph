@@ -1,5 +1,10 @@
 export type ValidComparisonSign = '=' | '!=' | '>' | '<' | '>=' | '<=' | 'IS' | 'IS NOT' | 'IN' | 'NOT IN'
 
+export enum OrderDirection {
+    ASC = 'ASC',
+    DESC = 'DESC',
+}
+
 export enum JoinType {
     INNER_JOIN = 'INNER_JOIN',
     LEFT_JOIN = 'LEFT JOIN',

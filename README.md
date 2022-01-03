@@ -56,7 +56,10 @@ Note that your data is ready to be returned from you api. No need to loop throug
 
 ## TODO
 
-- Test prepared statement variables
 - Add support for one-to-one relations
+- Test prepared statement variables
+- Formatting
+- Pagination
+- Insertion / Updating values?
 - Add support for auto camel-casing all keys
 - Performance fixes

@@ -28,7 +28,7 @@ export function createWhereBuilder(ctx: GraphBuildContext): Output {
 
         const add = (op: LogicalOpType) => (nameOrBuilderHandler: ((b: WhereBuilder) => void) | string, comparison?: ValidComparisonSign, value?: unknown): WhereBuilderChain => {
             if (typeof nameOrBuilderHandler === 'string') { // name, comparison, value
-                addOp(op, nameOrBuilderHandler, comparison, value)
+                addOp(op, nameOrBuilderHandler, comparison!, value)
             } else { // subbuilder
                 addGroup(op, nameOrBuilderHandler)
             }
@@ -71,7 +71,7 @@ export function createWhereBuilder(ctx: GraphBuildContext): Output {
         function addGroup(op: LogicalOpType, builderHandler: (b: WhereBuilder) => void) {
             const { builder, result } = createBuilderGroup(op)
             builderHandler(builder)
-            resultNode = resultNode.and(n.group(result.node))
+            resultNode = resultNode.and(n.group(result.node)) // TODO this is incorrect
         }
 
         return {
@@ -81,7 +81,7 @@ export function createWhereBuilder(ctx: GraphBuildContext): Output {
             },
             result: {
                 get node() {
-                    return resultNode
+                    return resultNode ?? n.identifier.true
                 },
             }
         }

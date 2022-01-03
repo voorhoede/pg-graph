@@ -131,3 +131,125 @@ test('should be able to get all user comments', async (t) => {
 
     t.end()
 })
+
+test('should be able to get all users their blogs and their comments', async (t) => {
+    const client = await connect()
+
+    const query = graphQuery()
+
+    query.source('user', user => {
+        user.field('name')
+
+        user.many('blog', 'posted_by', blog => {
+            blog.field('name')
+        })
+
+        user.many('comment', 'posted_by', comment => {
+            comment.field('message')
+        })
+    })
+
+    const row = await client.query(query.toSql()).then(result => result.rows[0])
+
+    t.deepEqual(row.data, {
+        user: [ 
+            {
+                name: 'Remco',
+                blog: [
+                    {
+                        name: 'Blog about cats',
+                    },
+                ],
+                comment: [
+                    {
+                        message: 'Amazing blog!'
+                    },
+                    {
+                        message: 'I agree with this blog'
+                    }
+                ]
+            },
+            {
+                name: 'Harry',
+                blog: [
+                    {
+                        name: 'Blog about computers',
+                    },
+                ],
+                comment: [
+                    {
+                        message: 'Amazing blog!'
+                    },
+                    {
+                        message: 'I agree with this blog'
+                    }
+                ]
+            }
+        ]
+    })
+
+    await client.end()
+
+    t.end()
+})
+
+test('should be able to get all users their blogs and their comments', async (t) => {
+    const client = await connect()
+
+    const query = graphQuery()
+
+    query.source('user', user => {
+        user.field('name')
+
+        user.many('blog', 'posted_by', blog => {
+            blog.field('name')
+        })
+
+        user.many('comment', 'posted_by', comment => {
+            comment.field('message')
+        })
+    })
+
+    const row = await client.query(query.toSql()).then(result => result.rows[0])
+
+    t.deepEqual(row.data, {
+        user: [ 
+            {
+                name: 'Remco',
+                blog: [
+                    {
+                        name: 'Blog about cats',
+                    },
+                ],
+                comment: [
+                    {
+                        message: 'Amazing blog!'
+                    },
+                    {
+                        message: 'I agree with this blog'
+                    }
+                ]
+            },
+            {
+                name: 'Harry',
+                blog: [
+                    {
+                        name: 'Blog about computers',
+                    },
+                ],
+                comment: [
+                    {
+                        message: 'Amazing blog!'
+                    },
+                    {
+                        message: 'I agree with this blog'
+                    }
+                ]
+            }
+        ]
+    })
+
+    await client.end()
+
+    t.end()
+})

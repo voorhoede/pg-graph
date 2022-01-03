@@ -6,7 +6,7 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "pretest": "npm run build && docker-compose -f ./tests/setup/docker-compose.yml up -d && node ./tests/setup/seed.js",
-    "test": "tape ./tests/*.js",
+    "test": "tape ./tests/*.js | colortape",
     "posttest": "cd ./tests/setup && docker-compose down && echo 'done'",
     "build": "tsc",
     "prepublish": "tsc",
@@ -15,6 +15,7 @@
   "author": "De Voorhoede",
   "license": "ISC",
   "devDependencies": {
+    "colortape": "^0.1.2",
     "pg": "^8.7.1",
     "tape": "^4.0.0",
     "typescript": "^4.5.4"

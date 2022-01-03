@@ -1,5 +1,5 @@
 import * as nodeTypes from './node-types'
-import { JoinType, ValidComparisonSign } from "./types"
+import { JoinType, OrderDirection, ValidComparisonSign } from "./types"
 
 export type NodeToSqlContext = {
     table?: string
@@ -9,10 +9,10 @@ function formatCast(name?: string) {
     return name ? '::' + name : ''
 }
 
-export function windowFilter(node: nodeTypes.FuncCall, where: nodeTypes.Where) {
+export function windowFilter(node: nodeTypes.FuncCall | nodeTypes.AggCall, where: nodeTypes.Where) {
     return {
         type: 'windowFilter' as const,
-        toSql(ctx: NodeToSqlContext) {
+        toSql(ctx: NodeToSqlContext): string {
             return `${node.toSql(ctx)} FILTER (${where.toSql(ctx)})`
         },
     }
@@ -21,11 +21,8 @@ export function windowFilter(node: nodeTypes.FuncCall, where: nodeTypes.Where) {
 export function cte(name: string, node: nodeTypes.SelectStatement) {
     return {
         type: 'cte' as const,
-        assignTableOwner(newOwner: string) {
-            node.assignTableOwner(newOwner)
-        },
-        toSql(_ctx: NodeToSqlContext) {
-            return `WITH "${name}" AS ( ${node.toSql()} )`
+        toSql(_ctx: NodeToSqlContext): string {
+            return `"${name}" AS ( ${node.toSql()} )`
         },
     }
 }
@@ -33,7 +30,7 @@ export function cte(name: string, node: nodeTypes.SelectStatement) {
 export function where(node: nodeTypes.SqlNode) {
     return {
         type: 'where' as const,
-        toSql(ctx: NodeToSqlContext) {
+        toSql(ctx: NodeToSqlContext): string {
             return 'WHERE ' + node.toSql(ctx)
         },
         and(other: nodeTypes.SqlNode) {
@@ -48,7 +45,7 @@ export function where(node: nodeTypes.SqlNode) {
 export function and(left: nodeTypes.SqlNode, right: nodeTypes.SqlNode) {
     return {
         type: 'and' as const,
-        toSql(ctx: NodeToSqlContext) {
+        toSql(ctx: NodeToSqlContext): string {
             return left.toSql(ctx) + ' AND ' + right.toSql(ctx)
         },
         and(other: nodeTypes.SqlNode) {
@@ -63,7 +60,7 @@ export function and(left: nodeTypes.SqlNode, right: nodeTypes.SqlNode) {
 export function or(left: nodeTypes.SqlNode, right: nodeTypes.SqlNode) {
     return {
         type: 'or' as const,
-        toSql(ctx: NodeToSqlContext) {
+        toSql(ctx: NodeToSqlContext): string {
             return left.toSql(ctx) + ' OR ' + right.toSql(ctx)
         },
         and(other: nodeTypes.SqlNode) {
@@ -78,7 +75,7 @@ export function or(left: nodeTypes.SqlNode, right: nodeTypes.SqlNode) {
 export function inList(...nodes: nodeTypes.SqlNode[]) {
     return {
         type: 'inList' as const,
-        toSql(ctx: NodeToSqlContext) {
+        toSql(ctx: NodeToSqlContext): string {
             return '(' + nodes.map(node => node.toSql(ctx)).join(', ') + ')'
         },
     }
@@ -87,7 +84,7 @@ export function inList(...nodes: nodeTypes.SqlNode[]) {
 export function compare(left: nodeTypes.SqlNode, comparison: ValidComparisonSign, right: nodeTypes.SqlNode) {
     return {
         type: 'comparison' as const,
-        toSql(ctx: NodeToSqlContext) {
+        toSql(ctx: NodeToSqlContext): string {
             return left.toSql(ctx) + ' ' + comparison + ' ' + right.toSql(ctx)
         },
         and(other: nodeTypes.SqlNode) {
@@ -112,12 +109,31 @@ identifier.true = identifier('TRUE')
 identifier.false = identifier('FALSE')
 identifier.null = identifier('NULL')
 
-export function funcCall(name: string, ...args: Array<nodeTypes.SqlNode>) {
+export function funcCall(name: string, ...args: nodeTypes.SqlNode[]) {
     return {
         type: 'funcCall' as const,
-        toSql(ctx: NodeToSqlContext) {
+        toSql(ctx: NodeToSqlContext): string {
             const argsToStr = args.map(arg => arg.toSql(ctx)).join(', ')
             return `${name}(${argsToStr})`
+        }
+    }
+}
+
+export function aggCall(name: string, args: nodeTypes.SqlNode[], orderBy?: nodeTypes.OrderBy) {
+    return {
+        type: 'aggCall' as const,
+        toSql(ctx: NodeToSqlContext): string {
+            const argsToStr = args.map(arg => arg.toSql(ctx)).join(', ')
+            return `${name}(${argsToStr}${orderBy ? ' ' + orderBy.toSql(ctx) : ''})`
+        }
+    }
+}
+
+export function orderBy(...columns: nodeTypes.OrderByColumn[]) {
+    return {
+        type: 'orderBy' as const,
+        toSql(ctx: NodeToSqlContext): string {
+            return `ORDER BY ${columns.map(col => col.toSql(ctx)).join(',')}`
         }
     }
 }
@@ -125,7 +141,7 @@ export function funcCall(name: string, ...args: Array<nodeTypes.SqlNode>) {
 export function rawValue(value: unknown, cast?: string) {
     return {
         type: 'rawValue' as const,
-        toSql(_ctx: NodeToSqlContext) {
+        toSql(_ctx: NodeToSqlContext): string {
             let formattedValue = value;
             switch (typeof value) {
                 case 'string': {
@@ -152,7 +168,7 @@ export function tableRef(name: string) {
         allFields() {
             return allFields(name)
         },
-        toSql(_ctx: NodeToSqlContext) {
+        toSql(_ctx: NodeToSqlContext): string {
             return `"${name}"`
         }
     }
@@ -161,7 +177,7 @@ export function tableRef(name: string) {
 export function tableRefWithAlias(ref: nodeTypes.TableRef, alias: string) {
     return {
         type: 'tableRefWithAlias' as const,
-        toSql(ctx: NodeToSqlContext) {
+        toSql(ctx: NodeToSqlContext): string {
             return ref.toSql(ctx) + ' ' + alias
         }
     }
@@ -170,7 +186,7 @@ export function tableRefWithAlias(ref: nodeTypes.TableRef, alias: string) {
 export function allFields(table?: string) {
     return {
         type: 'tableAllFieldsRef' as const,
-        toSql(ctx: NodeToSqlContext) {
+        toSql(ctx: NodeToSqlContext): string {
             const resolvedTable = table ?? ctx.table
             return resolvedTable ? `"${resolvedTable}".*` : '*'
         }
@@ -180,7 +196,7 @@ export function allFields(table?: string) {
 export function field(field: string, table?: string, cast?: string) {
     return {
         type: 'tableFieldRef' as const,
-        toSql(ctx: NodeToSqlContext) {
+        toSql(ctx: NodeToSqlContext): string {
             const resolvedTable = table ?? ctx.table
             return resolvedTable
                 ? `"${resolvedTable}".${field}${formatCast(cast)}`
@@ -192,7 +208,7 @@ export function field(field: string, table?: string, cast?: string) {
 export function group(node: nodeTypes.SqlNode) {
     return {
         type: 'group' as const,
-        toSql(ctx: NodeToSqlContext) {
+        toSql(ctx: NodeToSqlContext): string {
             return '(' + node.toSql(ctx) + ')'
         }
     }
@@ -201,7 +217,7 @@ export function group(node: nodeTypes.SqlNode) {
 export function subquery(select: nodeTypes.SelectStatement) {
     return {
         type: 'subquery' as const,
-        toSql(_ctx: NodeToSqlContext) {
+        toSql(_ctx: NodeToSqlContext): string {
             return '(' + select.toSql() + ') '
         }
     }
@@ -210,8 +226,17 @@ export function subquery(select: nodeTypes.SelectStatement) {
 export function derivedTable(select: nodeTypes.SelectStatement, alias: string) {
     return {
         type: 'derivedTable' as const,
-        toSql(_ctx: NodeToSqlContext) {
+        toSql(_ctx: NodeToSqlContext): string {
             return '(' + select.toSql() + ') ' + alias
+        }
+    }
+}
+
+export function orderByColumn(field: nodeTypes.TableFieldRef, mode?: OrderDirection) {
+    return {
+        type: 'orderByColumn' as const,
+        toSql(ctx: NodeToSqlContext): string {
+            return field.toSql(ctx) + (mode ? ' ' + mode : '')
         }
     }
 }
@@ -220,10 +245,11 @@ export function selectStatement() {
     const fieldCollection = createFieldCollection()
     const joinCollection = createJoinCollection()
     const ctes: nodeTypes.Cte[] = [];
-    const groupBys: nodeTypes.SqlNode[] = [];
-    let mainTableSource: string | undefined;
+    const groupBys: nodeTypes.TableFieldRef[] = [];
+    const orderBys: nodeTypes.OrderByColumn[] = []
     const sources: Array<nodeTypes.TableRef | nodeTypes.TableRefWithAlias> = []
 
+    let mainTableSource: string | undefined;
     let whereClauseChain: nodeTypes.Where | nodeTypes.And | nodeTypes.Or | null = null;
 
     type Join = {
@@ -241,7 +267,7 @@ export function selectStatement() {
             add(type: JoinType, src: nodeTypes.DerivedTable | nodeTypes.TableRef | nodeTypes.TableRefWithAlias, compare: nodeTypes.Compare | nodeTypes.Identifier | nodeTypes.RawValue) {
                 joins.push({ type, src, compare })
             },
-            toSql(ctx: NodeToSqlContext) {
+            toSql(ctx: NodeToSqlContext): string {
                 return joins.map(join => {
                     return `${join.type} ${join.src.toSql(ctx)} ON ${join.compare.toSql(ctx)}`
                 }).join(' ')
@@ -289,32 +315,40 @@ export function selectStatement() {
                     return field.sql.toSql(ctx) + (field.alias ? ` as ${field.alias}` : '')
                 }).join(', ')
             },
-            get(index: number) {
-                return fields[index]
-            },
             convertToJsonObject(alias?: string) {
                 fields = [{ sql: jsonBuildObject(), alias }]
             },
-            convertToJsonAgg(aggField: nodeTypes.TableFieldRef, alias?: string) {
-                fields = [{
-                    sql: funcCall('coalesce',
-                        windowFilter(
-                            funcCall('json_agg',
-                                jsonBuildObject()
-                            ),
-                            where(
-                                compare(
-                                    aggField,
-                                    'IS NOT',
-                                    identifier.null
+            convertToJsonAgg(alias?: string, nullField?: nodeTypes.TableFieldRef, orderBy?: nodeTypes.OrderBy) {
+                const call = aggCall('json_agg', [
+                    jsonBuildObject(),
+                ], orderBy)
+
+                if (nullField) {
+                    fields = [{
+                        sql: funcCall('coalesce',
+                            windowFilter(
+                                call,
+                                where(
+                                    compare(
+                                        nullField,
+                                        'IS NOT',
+                                        identifier.null
+                                    )
                                 )
-                            )
+                            ),
+                            rawValue('[]', 'json')
+                        ), alias
+                    }]
+                } else {
+                    fields = [{
+                        sql: funcCall('json_agg',
+                            jsonBuildObject()
                         ),
-                        rawValue('[]', 'json')
-                    ), alias
-                }]
+                        alias
+                    }]
+                }
             },
-            append(otherCollection) {
+            append(otherCollection: any) {
                 for (let item of otherCollection) {
                     this.add(item.sql, item.alias)
                 }
@@ -327,7 +361,6 @@ export function selectStatement() {
 
     return {
         type: 'selectStatement' as const,
-        assignTableOwner(_table: string) { },
         get fields() {
             return fieldCollection
         },
@@ -340,21 +373,34 @@ export function selectStatement() {
         addWhereClause(node: nodeTypes.SqlNode) {
             whereClauseChain = whereClauseChain ? whereClauseChain.and(node) : where(node)
         },
+        convertFieldsToJsonAgg(alias?: string, nullField?: nodeTypes.TableFieldRef) {
+            fieldCollection.convertToJsonAgg(alias, nullField, orderBys.length ? orderBy(...orderBys) : undefined)
+            orderBys.length = 0
+        },
+        convertFieldsToJsonObject(alias?: string) {
+            fieldCollection.convertToJsonObject(alias)
+        },
         source(tableName: string, alias?: string) {
             mainTableSource = alias ?? tableName //anonymous fields will be resolved to the main table source
 
             const ref = tableRef(tableName)
             sources.push(alias ? tableRefWithAlias(ref, alias) : ref)
         },
-        addGroupBy(sql: nodeTypes.SqlNode) {
+        addGroupBy(sql: nodeTypes.TableFieldRef) {
             groupBys.push(sql)
         },
-        toSql() {
+        addOrderBy(sql: nodeTypes.OrderByColumn) {
+            orderBys.push(sql)
+        },
+        toSql(): string {
             const ctx: NodeToSqlContext = {
                 table: mainTableSource
             };
 
             const parts = []
+            if (fieldCollection.length) {
+                parts.push(fieldCollection.toSql(ctx))
+            }
             if (sources.length) {
                 parts.push('FROM ' + sources.map(source => source.toSql(ctx)).join(','))
             }
@@ -365,12 +411,18 @@ export function selectStatement() {
                 parts.push(whereClauseChain.toSql(ctx))
             }
             if (groupBys.length) {
-                parts.push('GROUP BY ' + groupBys.map(groupBy => groupBy.toSql(ctx)).join(','))
+                parts.push('GROUP BY ' + groupBys.map(groupBy => groupBy.toSql(ctx)).join(', '))
+            }
+            if (orderBys.length) {
+                parts.push(orderBy(...orderBys).toSql(ctx))
             }
 
-            const cteSql = ctes.map(cte => cte.toSql(ctx)).join('\n')
+            let cteSql: string = ''
+            if (ctes.length) {
+                cteSql = 'WITH ' + ctes.map(cte => cte.toSql(ctx)).join(',\n')
+            }
 
-            return cteSql + `SELECT ${fieldCollection.toSql(ctx)}${parts.length ? ' ' + parts.join(' ') : ''}`
+            return cteSql + `SELECT ${parts.length ? parts.join(' ') : ''}`
         },
 
     }

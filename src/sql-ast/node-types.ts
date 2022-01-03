@@ -18,6 +18,9 @@ export interface Where extends ReturnType<typeof n.where> { }
 export interface Cte extends ReturnType<typeof n.cte> { }
 export interface WindowFilter extends ReturnType<typeof n.windowFilter> { }
 export interface InList extends ReturnType<typeof n.inList> { }
+export interface OrderBy extends ReturnType<typeof n.orderBy> { }
+export interface OrderByColumn extends ReturnType<typeof n.orderByColumn> { }
+export interface AggCall extends ReturnType<typeof n.aggCall> { }
 
 export type SqlNode =
     TableRef |
@@ -37,7 +40,10 @@ export type SqlNode =
     Where |
     Cte |
     WindowFilter |
-    InList
+    InList |
+    OrderBy |
+    OrderByColumn |
+    AggCall
 
 export function isSqlNode(n: any): n is SqlNode {
     return n.type && n.toSql

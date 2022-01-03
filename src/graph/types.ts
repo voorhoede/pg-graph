@@ -7,7 +7,8 @@ export enum GraphItemTypes {
     TABLE,
     FIELD,
     VALUE,
-    WHERE
+    WHERE,
+    ORDER_BY
 }
 
 export type ToSql = {
