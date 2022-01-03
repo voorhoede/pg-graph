@@ -59,6 +59,7 @@ Note that your data is ready to be returned from you api. No need to loop throug
 - Add support for one-to-one relations X
 - Test prepared statement variables X
 - Formatting queries so that they are actually readable
+- Many to many (manyThrough)?
 - Aggregrations like count, avg, sum
 - Where exists
 - Pagination

@@ -1,8 +1,10 @@
 import * as nodeTypes from './node-types'
 import { JoinType, OrderDirection, ValidComparisonSign } from "./types"
+import { createFormatter, Formatter } from './formatting'
 
 export type NodeToSqlContext = {
-    table?: string
+    table?: string,
+    formatter: Formatter,
 }
 
 function formatCast(name?: string) {
@@ -401,8 +403,8 @@ export function selectStatement() {
         addOrderBy(sql: nodeTypes.OrderByColumn) {
             orderBys.push(sql)
         },
-        toSql(): string {
-            const ctx: NodeToSqlContext = {
+        toSql(ctx: NodeToSqlContext = { table: undefined, formatter: createFormatter() }): string {
+            const ctx2: NodeToSqlContext = {
                 table: mainTableSource
             };
 
