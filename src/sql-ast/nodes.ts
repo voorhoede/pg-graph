@@ -241,6 +241,15 @@ export function orderByColumn(field: nodeTypes.TableFieldRef, mode?: OrderDirect
     }
 }
 
+export function placeholder(id: number, cast?: string) {
+    return {
+        type: 'placeholder' as const,
+        toSql(_ctx: NodeToSqlContext): string {
+            return '$' + id + formatCast(cast)
+        }
+    }
+}
+
 export function selectStatement() {
     const fieldCollection = createFieldCollection()
     const joinCollection = createJoinCollection()

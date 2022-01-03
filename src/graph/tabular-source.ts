@@ -23,7 +23,7 @@ export type TabularSource = {
     where(name: string, sign: ValidComparisonSign, value: any): TabularSource,
     where(fn: (builder: WhereBuilder) => void): TabularSource,
     field(name: string): Field,
-    value(jsonProp: string, value: string): Value,
+    value(jsonProp: string, value: any): Value,
     orderBy(name: string, mode?: OrderDirection): TabularSource
 } & ToSql
 

@@ -5,7 +5,7 @@ export type Value = {
     type: GraphItemTypes.VALUE,
 } & ToSql
 
-export function createValue(jsonProp: string, value: string, ctx: GraphBuildContext): Value {
+export function createValue(jsonProp: string, value: any, ctx: GraphBuildContext): Value {
     const placeholder = ctx.createPlaceholderForValue(value)
 
     return {

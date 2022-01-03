@@ -1,7 +1,7 @@
 import { nodeTypes, n } from "../sql-ast";
 
 export type GraphBuildContext = {
-    createPlaceholderForValue(value: any): nodeTypes.Identifier
+    createPlaceholderForValue(value: any): nodeTypes.Placeholder
     get values(): readonly any[]
 }
 
@@ -9,9 +9,10 @@ export function createGraphBuildContext(): GraphBuildContext {
     let placeholderValues: any[] = [];
 
     return {
-        createPlaceholderForValue(value: any): nodeTypes.Identifier {
+        createPlaceholderForValue(value: any): nodeTypes.Placeholder {
             placeholderValues.push(value)
-            return n.identifier(`$${(placeholderValues.length)}`)
+
+            return n.placeholder(placeholderValues.length, jsTypeToPgType(value))
         },
         get values() {
             return placeholderValues
@@ -52,5 +53,14 @@ function tableAliasCreator() {
         next() {
             return String.fromCharCode(alias++)
         }
+    }
+}
+
+function jsTypeToPgType(value: any) {
+    switch (typeof value) {
+        case 'string':
+            return 'text'
+        case 'number':
+            return 'int'
     }
 }

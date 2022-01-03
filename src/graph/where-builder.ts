@@ -13,7 +13,7 @@ export interface WhereBuilderChain {
 }
 
 export type WhereBuilder = (name: string, comparison: ValidComparisonSign, value: unknown) => WhereBuilderChain
-export type WhereBuilderResult = { get node(): nodeTypes.SqlNode }
+export type WhereBuilderResult = { get node(): nodeTypes.SqlNode | null }
 
 type Output = { builder: WhereBuilder, result: WhereBuilderResult };
 
@@ -71,7 +71,10 @@ export function createWhereBuilder(ctx: GraphBuildContext): Output {
         function addGroup(op: LogicalOpType, builderHandler: (b: WhereBuilder) => void) {
             const { builder, result } = createBuilderGroup(op)
             builderHandler(builder)
-            resultNode = resultNode.and(n.group(result.node)) // TODO this is incorrect
+            if (result.node) {
+                // due to the way this builder works it is impossible to get in an situation where resultNode is null
+                resultNode = resultNode!.and(n.group(result.node))
+            }
         }
 
         return {
@@ -81,7 +84,7 @@ export function createWhereBuilder(ctx: GraphBuildContext): Output {
             },
             result: {
                 get node() {
-                    return resultNode ?? n.identifier.true
+                    return resultNode
                 },
             }
         }

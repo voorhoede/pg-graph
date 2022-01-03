@@ -21,6 +21,7 @@ export interface InList extends ReturnType<typeof n.inList> { }
 export interface OrderBy extends ReturnType<typeof n.orderBy> { }
 export interface OrderByColumn extends ReturnType<typeof n.orderByColumn> { }
 export interface AggCall extends ReturnType<typeof n.aggCall> { }
+export interface Placeholder extends ReturnType<typeof n.placeholder> { }
 
 export type SqlNode =
     TableRef |
@@ -43,7 +44,8 @@ export type SqlNode =
     InList |
     OrderBy |
     OrderByColumn |
-    AggCall
+    AggCall |
+    Placeholder
 
 export function isSqlNode(n: any): n is SqlNode {
     return n.type && n.toSql

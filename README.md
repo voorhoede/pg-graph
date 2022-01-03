@@ -56,10 +56,12 @@ Note that your data is ready to be returned from you api. No need to loop throug
 
 ## TODO
 
-- Add support for one-to-one relations
-- Test prepared statement variables
-- Formatting
+- Add support for one-to-one relations X
+- Test prepared statement variables X
+- Formatting queries so that they are actually readable
+- Aggregrations like count, avg, sum
+- Where exists
 - Pagination
-- Insertion / Updating values?
 - Add support for auto camel-casing all keys
-- Performance fixes
+- Compile query into function
+- Insertion / Updating values?
