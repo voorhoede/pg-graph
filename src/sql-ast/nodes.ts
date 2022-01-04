@@ -22,7 +22,7 @@ export class Cte {
     toSql(ctx: NodeToSqlContext) {
         ctx.formatter
             .startIndent()
-            .writeLine(`"${name}" AS (`)
+            .writeLine(`"${this.name}" AS (`)
 
         this.node.toSql(ctx)
 
@@ -125,7 +125,7 @@ export class FuncCall {
         this.args = args
     }
     toSql(ctx: NodeToSqlContext) {
-        ctx.formatter.write(`${name}(`)
+        ctx.formatter.write(`${this.name}(`)
         if (this.name === 'json_build_object') {
             ctx.formatter
                 .break()
@@ -196,7 +196,7 @@ export class TableRef {
         return new AllFields(this.name)
     }
     toSql(ctx: NodeToSqlContext) {
-        ctx.formatter.write(`"${name}"`)
+        ctx.formatter.write(`"${this.name}"`)
     }
 }
 

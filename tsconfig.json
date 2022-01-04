@@ -5,7 +5,10 @@
         "declaration": true,
         "target": "ESNext",
         "outDir": "dist",
-        "module": "CommonJS"
+        "module": "CommonJS",
+        "types": [
+            "node"
+        ]
     },
     "files": [
         "src/index.ts"

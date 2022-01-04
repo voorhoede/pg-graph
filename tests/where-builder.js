@@ -1,7 +1,7 @@
 const test = require('tape')
 const { createWhereBuilder } = require('../dist/graph/where-builder')
 const { createGraphBuildContext } = require('../dist/graph/context')
-const { createNodeToSqlContext } = require('../dist/sql-ast/nodes')
+const { createNodeToSqlContext } = require('../dist/sql-ast/context')
 
 test('can create separate and conditions', async (t) => {
     const { builder, result } = createWhereBuilder(createGraphBuildContext())

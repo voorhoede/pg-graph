@@ -8,29 +8,6 @@ async function connect() {
     return client
 }
 
-test.only('should be able to get all comments belonging to the blogs of user "Remco"', async (t) => {
-    //const client = await connect()
-
-    const query = graphQuery()
-
-    query.source('comment', comment => {
-        comment.alias('comments')
-
-        comment.field('message')
-
-        comment
-            .through('blog')
-            .one('user', 'posted_by', q => {
-                q.field('name')
-                q.where('name', '=', 'Remco')
-            })
-    })
-
-    console.log(query.toSql())
-
-    t.end()
-})
-
 test('should be able to get all comments belonging to the blogs of user "Remco"', async (t) => {
     const client = await connect()
 

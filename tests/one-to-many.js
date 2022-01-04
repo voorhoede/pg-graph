@@ -185,6 +185,9 @@ test('should be able to get all users their blogs and their comments', async (t)
                     },
                     {
                         message: 'I agree with this blog'
+                    },
+                    {
+                        message: 'Very nerdy, i agree'
                     }
                 ]
             }
@@ -246,6 +249,9 @@ test('should be able to get all users their blogs and their comments', async (t)
                     },
                     {
                         message: 'I agree with this blog'
+                    },
+                    {
+                        message: 'Very nerdy, i agree'
                     }
                 ]
             }
