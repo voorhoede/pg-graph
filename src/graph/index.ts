@@ -2,6 +2,7 @@ import { createGraphBuildContext, createGraphToSqlContext, GraphBuildContext } f
 import { createRootTabularSource, TabularSourceBuilder, TabularSource } from "./tabular-source";
 import { n } from "../sql-ast";
 import { toSqlKey } from "./types";
+import { createFormatter } from "../sql-ast/formatting";
 
 export function graphQuery() {
     const sources: TabularSource[] = [];
@@ -27,7 +28,14 @@ export function graphQuery() {
 
             statement.fields.convertToJsonObject('data')
 
-            return statement.toSql()
+            const formatter = createFormatter()
+
+            statement.toSql({
+                table: undefined,
+                formatter,
+            })
+
+            return formatter.toString()
         },
         values(): readonly any[] {
             return graphBuildContext.values

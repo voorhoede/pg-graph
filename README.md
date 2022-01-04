@@ -58,10 +58,10 @@ Note that your data is ready to be returned from you api. No need to loop throug
 
 - Add support for one-to-one relations X
 - Test prepared statement variables X
-- Formatting queries so that they are actually readable
-- Many to many (manyThrough)?
+- Formatting queries so that they are actually readable x
+- Many to many (manyThrough)? x
 - Aggregrations like count, avg, sum
-- Where exists
+- Has (only users with blog that has x comments)
 - Pagination
 - Add support for auto camel-casing all keys
 - Compile query into function
