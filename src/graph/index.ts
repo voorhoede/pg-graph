@@ -3,6 +3,7 @@ import { createRootTabularSource, TabularSourceBuilder, TabularSource } from "./
 import { n } from "../sql-ast";
 import { toSqlKey } from "./types";
 import { createFormatter } from "../sql-ast/formatting";
+import { createNodeToSqlContext } from "../sql-ast/nodes";
 
 export function graphQuery() {
     const sources: TabularSource[] = [];
@@ -20,20 +21,18 @@ export function graphQuery() {
         },
         toSql(): string {
             const statement = n.selectStatement()
-            const ctx = createGraphToSqlContext()
+            const graphToSqlCtx = createGraphToSqlContext()
 
             sources.forEach(source => {
-                source[toSqlKey](statement, ctx)
+                source[toSqlKey](statement, graphToSqlCtx)
             })
 
             statement.fields.convertToJsonObject('data')
 
             const formatter = createFormatter()
+            const nodeToSqlCtx = createNodeToSqlContext(formatter)
 
-            statement.toSql({
-                table: undefined,
-                formatter,
-            })
+            statement.toSql(nodeToSqlCtx)
 
             return formatter.toString()
         },

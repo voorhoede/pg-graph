@@ -15,6 +15,7 @@
   "author": "De Voorhoede",
   "license": "ISC",
   "devDependencies": {
+    "@types/tape": "^4.13.2",
     "colortape": "^0.1.2",
     "pg": "^8.7.1",
     "tape": "^4.0.0",

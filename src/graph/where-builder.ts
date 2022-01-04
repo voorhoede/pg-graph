@@ -1,6 +1,7 @@
 
 import { ValidComparisonSign, nodeTypes, n } from "../sql-ast"
 import { isSqlNode, SqlNode } from "../sql-ast/node-types"
+import { and, or } from "../sql-ast/nodes"
 import { GraphBuildContext } from "./context"
 
 export type LogicalOpType = 'and' | 'or'
@@ -12,7 +13,7 @@ export interface WhereBuilderChain {
     or(name: string, comparison: ValidComparisonSign, value: unknown): WhereBuilderChain,
 }
 
-export type WhereBuilder = (name: string, comparison: ValidComparisonSign, value: unknown) => WhereBuilderChain
+export type WhereBuilder = (nameOrBuilderHandler: ((b: WhereBuilder) => void) | string, comparison?: ValidComparisonSign, value?: unknown) => WhereBuilderChain
 export type WhereBuilderResult = { get node(): nodeTypes.SqlNode | null }
 
 type Output = { builder: WhereBuilder, result: WhereBuilderResult };
@@ -24,7 +25,7 @@ type Output = { builder: WhereBuilder, result: WhereBuilderResult };
  */
 export function createWhereBuilder(ctx: GraphBuildContext): Output {
     function createBuilderGroup(groupOp: LogicalOpType): Output {
-        let resultNode: nodeTypes.Compare | nodeTypes.And | nodeTypes.Or | null = null
+        let resultNode: nodeTypes.Compare | nodeTypes.And | nodeTypes.Or | nodeTypes.Group | null = null
 
         const add = (op: LogicalOpType) => (nameOrBuilderHandler: ((b: WhereBuilder) => void) | string, comparison?: ValidComparisonSign, value?: unknown): WhereBuilderChain => {
             if (typeof nameOrBuilderHandler === 'string') { // name, comparison, value
@@ -64,7 +65,7 @@ export function createWhereBuilder(ctx: GraphBuildContext): Output {
             if (!resultNode) {
                 resultNode = node
             } else {
-                resultNode = resultNode[op](node)
+                resultNode = op === 'and' ? and(resultNode, node) : or(resultNode, node)
             }
         }
 
@@ -72,19 +73,25 @@ export function createWhereBuilder(ctx: GraphBuildContext): Output {
             const { builder, result } = createBuilderGroup(op)
             builderHandler(builder)
             if (result.node) {
-                // due to the way this builder works it is impossible to get in an situation where resultNode is null
-                resultNode = resultNode!.and(n.group(result.node))
+                if (!resultNode) {
+                    resultNode = n.group(result.node)
+                } else {
+                    resultNode = op === 'and' ? and(resultNode, n.group(result.node)) : or(resultNode, n.group(result.node))
+                }
             }
         }
 
         return {
-            builder: (name: string, comparison: ValidComparisonSign, value: unknown) => {
-                chain[groupOp](name, comparison, value)
-                return chain
+            builder(nameOrBuilderHandler: ((b: WhereBuilder) => void) | string, comparison?: ValidComparisonSign, value?: unknown) {
+                return (chain[groupOp] as WhereBuilder)(nameOrBuilderHandler, comparison, value)
             },
             result: {
                 get node() {
-                    return resultNode
+                    let n: SqlNode = resultNode
+                    if (n.type === 'group') {
+                        n = n.unwrap()
+                    }
+                    return n
                 },
             }
         }

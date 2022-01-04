@@ -10,9 +10,15 @@ export function createGraphBuildContext(): GraphBuildContext {
 
     return {
         createPlaceholderForValue(value: any): nodeTypes.Placeholder {
-            placeholderValues.push(value)
+            let i = placeholderValues.indexOf(value)
+            if (i > -1) {
+                i += 1
+            } else {
+                placeholderValues.push(value)
+                i = placeholderValues.length
+            }
 
-            return n.placeholder(placeholderValues.length, jsTypeToPgType(value))
+            return n.placeholder(i, jsTypeToPgType(value))
         },
         get values() {
             return placeholderValues

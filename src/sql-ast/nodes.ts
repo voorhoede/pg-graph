@@ -1,10 +1,17 @@
 import * as nodeTypes from './node-types'
 import { JoinType, OrderDirection, ValidComparisonSign } from "./types"
-import { Formatter } from './formatting'
+import { createFormatter, Formatter } from './formatting'
 
 export type NodeToSqlContext = {
     table?: string,
     formatter: Formatter,
+}
+
+export function createNodeToSqlContext(formatter = createFormatter()) {
+    return {
+        table: undefined,
+        formatter
+    }
 }
 
 function formatCast(name?: string) {
@@ -262,6 +269,9 @@ export function group(node: nodeTypes.SqlNode) {
             ctx.formatter.write('(')
             node.toSql(ctx)
             ctx.formatter.write(')')
+        },
+        unwrap() {
+            return node
         }
     }
 }
