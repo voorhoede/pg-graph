@@ -1,7 +1,7 @@
 export type Formatter = ReturnType<typeof createFormatter>
 
 export function createFormatter() {
-    const lines = []
+    const lines: string[] = []
     let identation = 0
     let lineIndex = 0
 
@@ -32,11 +32,16 @@ export function createFormatter() {
         join<T>(items: T[], fn: (item: T, index: number) => void, sep: string) {
             items.forEach((item, index) => {
                 if (index > 0) {
-                    if (sep === undefined) {
-                        this.break()
-                    } else {
-                        this.write(sep)
-                    }
+                    this.write(sep)
+                }
+                fn(item, index)
+            })
+            return this
+        },
+        joinLines<T>(items: T[], fn: (item: T, index: number) => void) {
+            items.forEach((item, index) => {
+                if (index > 0) {
+                    this.break()
                 }
                 fn(item, index)
             })

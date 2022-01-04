@@ -1,51 +1,6 @@
 import * as n from "./nodes";
 
-export interface TableRef extends ReturnType<typeof n.tableRef> { }
-export interface TableAllFieldsRef extends ReturnType<typeof n.allFields> { }
-export interface RawValue extends ReturnType<typeof n.rawValue> { }
-export interface TableFieldRef extends ReturnType<typeof n.field> { }
-export interface Identifier extends ReturnType<typeof n.identifier> { }
-export interface SelectStatement extends ReturnType<typeof n.selectStatement> { }
-export interface DerivedTable extends ReturnType<typeof n.derivedTable> { }
-export interface Group extends ReturnType<typeof n.group> { }
-export interface FuncCall extends ReturnType<typeof n.funcCall> { }
-export interface Subquery extends ReturnType<typeof n.subquery> { }
-export interface TableRefWithAlias extends ReturnType<typeof n.tableRefWithAlias> { }
-export interface Compare extends ReturnType<typeof n.compare> { }
-export interface And extends ReturnType<typeof n.and> { }
-export interface Or extends ReturnType<typeof n.or> { }
-export interface Where extends ReturnType<typeof n.where> { }
-export interface Cte extends ReturnType<typeof n.cte> { }
-export interface WindowFilter extends ReturnType<typeof n.windowFilter> { }
-export interface InList extends ReturnType<typeof n.inList> { }
-export interface OrderBy extends ReturnType<typeof n.orderBy> { }
-export interface OrderByColumn extends ReturnType<typeof n.orderByColumn> { }
-export interface AggCall extends ReturnType<typeof n.aggCall> { }
-export interface Placeholder extends ReturnType<typeof n.placeholder> { }
-
-export type SqlNode =
-    TableRef |
-    TableRefWithAlias |
-    TableAllFieldsRef |
-    RawValue |
-    TableFieldRef |
-    Identifier |
-    Group |
-    FuncCall |
-    SelectStatement |
-    DerivedTable |
-    Subquery |
-    Or |
-    And |
-    Compare |
-    Where |
-    Cte |
-    WindowFilter |
-    InList |
-    OrderBy |
-    OrderByColumn |
-    AggCall |
-    Placeholder
+export type SqlNode = n.Where | n.AggCall | n.AllFields | n.And | n.Compare | n.Cte | n.DerivedTable | n.Field | n.FuncCall | n.Group | n.Identifier | n.InList | n.Or | n.And | n.OrderBy | n.OrderByColumn | n.Placeholder | n.RawValue | n.SelectStatement | n.Subquery | n.TableRef | n.TableRefWithAlias | n.Where | n.WindowFilter
 
 export function isSqlNode(n: any): n is SqlNode {
     return n.type && n.toSql

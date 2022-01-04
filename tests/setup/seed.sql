@@ -32,5 +32,6 @@ INSERT INTO "user" (name) VALUES ('Harry');
 INSERT INTO blog (name, posted_by) VALUES ('Blog about computers', currval('user_id_seq'));
 INSERT INTO comment (blog_id, message, posted_by) VALUES (currval('blog_id_seq'), 'Amazing blog!', currval('user_id_seq'));
 INSERT INTO comment (blog_id, message, posted_by) VALUES (currval('blog_id_seq'), 'I agree with this blog', currval('user_id_seq'));
+INSERT INTO comment (blog_id, message, posted_by) VALUES (currval('blog_id_seq'), 'Very nerdy, i agree', currval('user_id_seq'));
 
 COMMIT;

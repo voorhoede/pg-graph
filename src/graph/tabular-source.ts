@@ -151,6 +151,7 @@ export function createNestedTabularSource(options: TabularSourceOptions, relType
                 subStatement.convertFieldsToJsonAgg(name, n.field('id', targetTableAlias))
 
                 statement.fields.append(subStatement.fields)
+                subStatement.copyWhereClause(statement)
 
                 statement.addGroupBy(n.field('id', parentTableAlias))
             } else {
@@ -251,6 +252,7 @@ export function createNestedTabularSource(options: TabularSourceOptions, relType
             }
 
             statement.fields.append(subStatement.fields)
+            subStatement.copyWhereClause(statement)
 
         } else {
             (relType as never)

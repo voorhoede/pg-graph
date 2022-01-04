@@ -1,7 +1,7 @@
 
 import { ValidComparisonSign, nodeTypes, n } from "../sql-ast"
 import { isSqlNode, SqlNode } from "../sql-ast/node-types"
-import { and, or } from "../sql-ast/nodes"
+import { and, or, tableRef } from "../sql-ast/nodes"
 import { GraphBuildContext } from "./context"
 
 export type LogicalOpType = 'and' | 'or'
@@ -13,8 +13,12 @@ export interface WhereBuilderChain {
     or(name: string, comparison: ValidComparisonSign, value: unknown): WhereBuilderChain,
 }
 
+export type WhereBuilderResultNode = nodeTypes.Compare | nodeTypes.And | nodeTypes.Or | nodeTypes.Group | null
 export type WhereBuilder = (nameOrBuilderHandler: ((b: WhereBuilder) => void) | string, comparison?: ValidComparisonSign, value?: unknown) => WhereBuilderChain
-export type WhereBuilderResult = { get node(): nodeTypes.SqlNode | null }
+export type WhereBuilderResult = {
+    setTableContext(name: string): void
+    get node(): WhereBuilderResultNode
+}
 
 type Output = { builder: WhereBuilder, result: WhereBuilderResult };
 
@@ -24,8 +28,11 @@ type Output = { builder: WhereBuilder, result: WhereBuilderResult };
  * @returns 
  */
 export function createWhereBuilder(ctx: GraphBuildContext): Output {
+
+    const fields: nodeTypes.TableFieldRef[] = []
+
     function createBuilderGroup(groupOp: LogicalOpType): Output {
-        let resultNode: nodeTypes.Compare | nodeTypes.And | nodeTypes.Or | nodeTypes.Group | null = null
+        let resultNode: WhereBuilderResultNode = null
 
         const add = (op: LogicalOpType) => (nameOrBuilderHandler: ((b: WhereBuilder) => void) | string, comparison?: ValidComparisonSign, value?: unknown): WhereBuilderChain => {
             if (typeof nameOrBuilderHandler === 'string') { // name, comparison, value
@@ -61,7 +68,10 @@ export function createWhereBuilder(ctx: GraphBuildContext): Output {
                 valueNode = createNodeForValue(value)
             }
 
-            const node = n.compare(n.field(name), comparison, valueNode)
+            const field = n.field(name)
+            fields.push(field)
+
+            const node = n.compare(field, comparison, valueNode)
             if (!resultNode) {
                 resultNode = node
             } else {
@@ -86,10 +96,15 @@ export function createWhereBuilder(ctx: GraphBuildContext): Output {
                 return (chain[groupOp] as WhereBuilder)(nameOrBuilderHandler, comparison, value)
             },
             result: {
+                setTableContext(name: string) {
+                    fields.forEach(field => {
+                        field.table = name
+                    })
+                },
                 get node() {
-                    let n: SqlNode = resultNode
-                    if (n.type === 'group') {
-                        n = n.unwrap()
+                    let n: WhereBuilderResultNode = resultNode
+                    if (n && n.type === 'group') {
+                        n = n.unwrap() as WhereBuilderResultNode
                     }
                     return n
                 },

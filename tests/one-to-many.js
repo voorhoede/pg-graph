@@ -119,6 +119,9 @@ test('should be able to get all user comments', async (t) => {
                             },
                             {
                                 message: 'I agree with this blog'
+                            },
+                            {
+                                message: 'Very nerdy, i agree'
                             }
                         ]
                     }
