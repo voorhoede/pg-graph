@@ -27,12 +27,11 @@ export function graphQuery() {
                 source[toSqlKey](statement, graphToSqlCtx)
             })
 
-            statement.fields.convertToJsonObject('data')
+            statement.convertFieldsToJsonObject('data')
 
             const formatter = createFormatter()
-            const nodeToSqlCtx = createNodeToSqlContext(formatter)
 
-            statement.toSql(nodeToSqlCtx)
+            statement.toSql(createNodeToSqlContext(formatter))
 
             return formatter.toString()
         },

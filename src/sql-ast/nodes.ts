@@ -281,35 +281,24 @@ export class Placeholder {
     }
 }
 
-function createJoinCollection() {
-    let joins: Join[] = []
-    return {
-        get length() {
-            return joins.length
-        },
-        add(type: JoinType, src: DerivedTable | TableRef | TableRefWithAlias, compare: Compare | Identifier | RawValue) {
-            joins.push({ type, src, compare })
-        },
-        toSql(ctx: NodeToSqlContext) {
-            ctx.formatter.joinLines(joins, join => {
-                ctx.formatter
-                    .writeLine(`${join.type}`)
-                    .break()
-                    .startIndent()
-                join.src.toSql(ctx)
-                ctx.formatter.write(` ON `)
-                join.compare.toSql(ctx)
-                ctx.formatter.endIndent()
-            })
-        },
-        [Symbol.iterator]() {
-            return joins[Symbol.iterator]()
-        }
+export class Join {
+    constructor(public type: JoinType, public src: DerivedTable | TableRef | TableRefWithAlias, public compare: Compare | Identifier | RawValue) { }
+    toSql(ctx: NodeToSqlContext) {
+        ctx.formatter
+            .writeLine(`${this.type}`)
+            .break()
+            .startIndent()
+        this.src.toSql(ctx)
+        ctx.formatter.write(` ON `)
+        this.compare.toSql(ctx)
+        ctx.formatter.endIndent()
     }
 }
 
+type SelectField = Field | Subquery | FuncCall | RawValue | Placeholder
+
 function createFieldCollection() {
-    let fields: Array<{ sql: SqlNode, alias?: string }> = []
+    let fields: Array<{ sql: SelectField, alias?: string }> = []
 
     function jsonBuildObject() {
         if (!fields.length) {
@@ -330,10 +319,7 @@ function createFieldCollection() {
     }
 
     return {
-        get length() {
-            return fields.length
-        },
-        add(sql: SqlNode, alias?: string) {
+        add(sql: SelectField, alias?: string) {
             fields.push({ sql, alias })
         },
         toSql(ctx: NodeToSqlContext) {
@@ -393,10 +379,8 @@ function createFieldCollection() {
                 }]
             }
         },
-        append(otherCollection: any) {
-            for (let item of otherCollection) {
-                this.add(item.sql, item.alias)
-            }
+        get length() {
+            return fields.length
         },
         [Symbol.iterator]() {
             return fields[Symbol.iterator]()
@@ -404,18 +388,12 @@ function createFieldCollection() {
     }
 }
 
-type Join = {
-    type: JoinType
-    src: DerivedTable | TableRef | TableRefWithAlias
-    compare: Compare | Identifier | RawValue
-}
-
 export class SelectStatement {
-    public fields = createFieldCollection()
-    public joins = createJoinCollection()
+    private fields = createFieldCollection()
+    private joins: Join[] = [];
     private ctes: Cte[] = [];
     private groupBys: Field[] = [];
-    private orderBys: OrderByColumn[] = []
+    private orderByColumns: OrderByColumn[] = []
     private sources: Array<TableRef | TableRefWithAlias> = []
     private mainTableSource?: string;
     private whereClauseChain: WhereBuilderResultNode | null = null;
@@ -429,8 +407,8 @@ export class SelectStatement {
         this.whereClauseChain = this.whereClauseChain ? new And(this.whereClauseChain, node) : node
     }
     convertFieldsToJsonAgg(alias?: string, nullField?: Field) {
-        this.fields.convertToJsonAgg(alias, nullField, this.orderBys.length ? new OrderBy(...this.orderBys) : undefined)
-        this.orderBys.length = 0
+        this.fields.convertToJsonAgg(alias, nullField, this.orderByColumns.length ? new OrderBy(...this.orderByColumns) : undefined)
+        this.orderByColumns.length = 0
     }
     convertFieldsToJsonObject(alias?: string) {
         this.fields.convertToJsonObject(alias)
@@ -441,20 +419,36 @@ export class SelectStatement {
         const ref = new TableRef(tableName)
         this.sources.push(alias ? new TableRefWithAlias(ref, alias) : ref)
     }
+    addJoin(sql: Join) {
+        this.joins.push(sql)
+    }
     addGroupBy(sql: Field) {
         this.groupBys.push(sql)
     }
     addOrderBy(sql: OrderByColumn) {
-        this.orderBys.push(sql)
+        this.orderByColumns.push(sql)
+    }
+    addField(field: SelectField, alias?: string) {
+        this.fields.add(field, alias)
     }
     copyOrderBys(other: SelectStatement) {
-        this.orderBys.forEach(orderBy => {
+        this.orderByColumns.forEach(orderBy => {
             other.addOrderBy(orderBy)
+        })
+    }
+    copyGroupBys(other: SelectStatement) {
+        this.groupBys.forEach(groupBy => {
+            other.addGroupBy(groupBy)
         })
     }
     copyWhereClause(other: SelectStatement) {
         if (this.whereClauseChain) {
             other.addWhereClause(this.whereClauseChain)
+        }
+    }
+    copyFields(other: SelectStatement) {
+        for (let { sql, alias } of this.fields) {
+            other.addField(sql, alias)
         }
     }
     toSql(ctx: NodeToSqlContext) {
@@ -490,7 +484,9 @@ export class SelectStatement {
                 .endIndent()
         }
 
-        this.joins.toSql(subCtx)
+        ctx.formatter.joinLines(this.joins, join => {
+            join.toSql(subCtx)
+        })
 
         if (this.whereClauseChain) {
             new Where(this.whereClauseChain).toSql(subCtx)
@@ -501,8 +497,8 @@ export class SelectStatement {
             ctx.formatter.join(this.groupBys, groupByCol => groupByCol.toSql(ctx), ', ')
         }
 
-        if (this.orderBys.length) {
-            new OrderBy(...this.orderBys).toSql(subCtx)
+        if (this.orderByColumns.length) {
+            new OrderBy(...this.orderByColumns).toSql(subCtx)
         }
 
         ctx.formatter.endIndent()

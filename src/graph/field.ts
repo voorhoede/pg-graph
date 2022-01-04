@@ -16,7 +16,7 @@ export function createField(name: string): Field {
             return this
         },
         [toSqlKey](statement, ctx) {
-            statement.fields.add(new n.Field(name, ctx.tableAlias), jsonProp)
+            statement.addField(new n.Field(name, ctx.tableAlias), jsonProp)
         }
     }
 }

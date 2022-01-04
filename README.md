@@ -54,15 +54,47 @@ console.log(row.data)
 
 Note that your data is ready to be returned from you api. No need to loop through all rows and convert it to json.
 
-## TODO
+## Ideas
 
-- Add support for one-to-one relations X
-- Test prepared statement variables X
-- Formatting queries so that they are actually readable x
-- Many to many (manyThrough)? x
-- Aggregrations like count, avg, sum
-- Has (only users with blog that has x comments)
-- Pagination
-- Add support for auto camel-casing all keys
-- Compile query into function
-- Insertion / Updating values?
+### Aggregrations like count, avg, sum
+
+"As a user I want to retrieve the amount of comments in a blog"
+
+```
+const query = graphQuery()
+
+query.source('blog', blog => {
+    blog.many('comment', comments => {
+        // will be added as a agg in blog
+        // blog: { agg: { count: 30 } }
+        comments.count()
+
+        // maybe the amount of comments grouped by user?
+        comments.count().groupBy('posted_by')
+
+        // or maybe something like this to make it clearer that the data points are aggregrated
+        comments.agg(agg => {
+            agg.count()
+
+            agg.countWhere()
+        })
+    })
+})
+```
+
+## Pagination
+
+"As a user I want efficient pagination"
+
+Offer a solution for limit/offset and keyset pagination as separate modules
+
+```
+const query = graphQuery()
+    .withPlugin(offsetPagination())
+
+query.source('blog', blog => {
+    blog.many('comment', comments => {
+        comments.paginated({ offset: 50, limit: 30 })
+    })
+})
+```

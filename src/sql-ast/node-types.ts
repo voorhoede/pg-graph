@@ -24,7 +24,8 @@ export type SqlNode =
     n.TableRef |
     n.TableRefWithAlias |
     n.Where |
-    n.WindowFilter
+    n.WindowFilter |
+    n.Join
 
 export function isSqlNode(n: any): n is SqlNode {
     return n.type && n.toSql

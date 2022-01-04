@@ -11,7 +11,7 @@ export function createValue(jsonProp: string, value: any, ctx: GraphBuildContext
     return {
         type: GraphItemTypes.VALUE,
         [toSqlKey](statement) {
-            statement.fields.add(placeholder, jsonProp)
+            statement.addField(placeholder, jsonProp)
         }
     }
 }
