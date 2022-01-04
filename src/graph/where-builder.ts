@@ -1,7 +1,6 @@
 
-import { ValidComparisonSign, nodeTypes, n } from "../sql-ast"
+import { ValidComparisonSign, n } from "../sql-ast"
 import { isSqlNode, SqlNode } from "../sql-ast/node-types"
-import { and, or, tableRef } from "../sql-ast/nodes"
 import { GraphBuildContext } from "./context"
 
 export type LogicalOpType = 'and' | 'or'
@@ -13,7 +12,7 @@ export interface WhereBuilderChain {
     or(name: string, comparison: ValidComparisonSign, value: unknown): WhereBuilderChain,
 }
 
-export type WhereBuilderResultNode = nodeTypes.Compare | nodeTypes.And | nodeTypes.Or | nodeTypes.Group | null
+export type WhereBuilderResultNode = n.Compare | n.And | n.Or | n.Group | null
 export type WhereBuilder = (nameOrBuilderHandler: ((b: WhereBuilder) => void) | string, comparison?: ValidComparisonSign, value?: unknown) => WhereBuilderChain
 export type WhereBuilderResult = {
     setTableContext(name: string): void
@@ -29,7 +28,7 @@ type Output = { builder: WhereBuilder, result: WhereBuilderResult };
  */
 export function createWhereBuilder(ctx: GraphBuildContext): Output {
 
-    const fields: nodeTypes.TableFieldRef[] = []
+    const fields: n.Field[] = []
 
     function createBuilderGroup(groupOp: LogicalOpType): Output {
         let resultNode: WhereBuilderResultNode = null
@@ -63,19 +62,19 @@ export function createWhereBuilder(ctx: GraphBuildContext): Output {
                     throw new Error('Unexpected value. For IN or NOT IN operators the value should be an array')
                 }
 
-                valueNode = n.inList(...value.map(createNodeForValue))
+                valueNode = new n.InList(...value.map(createNodeForValue))
             } else {
                 valueNode = createNodeForValue(value)
             }
 
-            const field = n.field(name)
+            const field = new n.Field(name)
             fields.push(field)
 
-            const node = n.compare(field, comparison, valueNode)
+            const node = new n.Compare(field, comparison, valueNode)
             if (!resultNode) {
                 resultNode = node
             } else {
-                resultNode = op === 'and' ? and(resultNode, node) : or(resultNode, node)
+                resultNode = op === 'and' ? new n.And(resultNode, node) : new n.Or(resultNode, node)
             }
         }
 
@@ -84,9 +83,9 @@ export function createWhereBuilder(ctx: GraphBuildContext): Output {
             builderHandler(builder)
             if (result.node) {
                 if (!resultNode) {
-                    resultNode = n.group(result.node)
+                    resultNode = new n.Group(result.node)
                 } else {
-                    resultNode = op === 'and' ? and(resultNode, n.group(result.node)) : or(resultNode, n.group(result.node))
+                    resultNode = op === 'and' ? new n.And(resultNode, new n.Group(result.node)) : new n.Or(resultNode, new n.Group(result.node))
                 }
             }
         }
@@ -102,11 +101,11 @@ export function createWhereBuilder(ctx: GraphBuildContext): Output {
                     })
                 },
                 get node() {
-                    let n: WhereBuilderResultNode = resultNode
-                    if (n && n.type === 'group') {
-                        n = n.unwrap() as WhereBuilderResultNode
+                    let node: WhereBuilderResultNode = resultNode
+                    if (node && node instanceof n.Group) {
+                        node = node.unwrap() as WhereBuilderResultNode
                     }
-                    return n
+                    return node
                 },
             }
         }

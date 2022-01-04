@@ -7,8 +7,7 @@ import { createField, Field } from "./field"
 import { createValue, Value } from "./value"
 import { createOrderBy, OrderBy } from "./order-by"
 
-import { nodeTypes, n, ValidComparisonSign, JoinType } from "../sql-ast";
-import { cte } from "../sql-ast/nodes"
+import { n, ValidComparisonSign, JoinType } from "../sql-ast";
 import { OrderDirection } from "../sql-ast/types"
 
 export type TabularSourceBuilder = (s: TabularSource) => void
@@ -41,7 +40,7 @@ type TabularSourceToSqlOptions = {
     ctx: GraphToSqlContext,
     targetTable: string,
     name: string,
-    statement: nodeTypes.SelectStatement,
+    statement: n.SelectStatement,
     items: readonly Item[],
     through?: Through
 };
@@ -69,7 +68,7 @@ export function createRootTabularSource(options: TabularSourceOptions) {
         subCtx.subRelationCount = getTabularItemsCount(items)
 
         // we create a cte that uses json_build_object to build the result
-        const cteSelect = n.selectStatement()
+        const cteSelect = new n.SelectStatement()
         cteSelect.source(targetTable, alias)
 
         // apply all items to the cteSelect
@@ -78,15 +77,15 @@ export function createRootTabularSource(options: TabularSourceOptions) {
         cteSelect.fields.convertToJsonObject('data')
 
         // todo check if the cte already exists?
-        statement.addCte(cte(`${name}Cte`, cteSelect))
+        statement.addCte(new n.Cte(`${name}Cte`, cteSelect))
 
         // we use a json_agg with the result of the cte to make sure that we only get one row
         const cteName = `${name}Cte`
-        const subSelect = n.selectStatement()
+        const subSelect = new n.SelectStatement()
         subSelect.source(cteName)
-        subSelect.fields.add(n.funcCall('json_agg', n.field('data', cteName)))
+        subSelect.fields.add(new n.FuncCall('json_agg', new n.Field('data', cteName)))
 
-        statement.fields.add(n.subquery(subSelect), name)
+        statement.fields.add(new n.Subquery(subSelect), name)
     })
 }
 
@@ -115,51 +114,51 @@ export function createNestedTabularSource(options: TabularSourceOptions, relType
 
                     statement.joins.add(
                         JoinType.LEFT_JOIN,
-                        n.tableRefWithAlias(n.tableRef(through.table), joinAlias),
-                        n.compare(
-                            n.field(through.foreignKey ?? guessForeignKey(through.table), joinAlias),
+                        new n.TableRefWithAlias(new n.TableRef(through.table), joinAlias),
+                        new n.Compare(
+                            new n.Field(through.foreignKey ?? guessForeignKey(through.table), joinAlias),
                             '=',
-                            n.field('id', parentTableAlias),
+                            new n.Field('id', parentTableAlias),
                         )
                     )
 
                     statement.joins.add(
                         JoinType.INNER_JOIN,
-                        n.tableRefWithAlias(n.tableRef(targetTable), targetTableAlias),
-                        n.compare(
-                            n.field(guessForeignKey(through.table), targetTableAlias),
+                        new n.TableRefWithAlias(new n.TableRef(targetTable), targetTableAlias),
+                        new n.Compare(
+                            new n.Field(guessForeignKey(through.table), targetTableAlias),
                             '=',
-                            n.field('id', joinAlias)
+                            new n.Field('id', joinAlias)
                         )
                     )
                 } else {
                     statement.joins.add(
                         JoinType.LEFT_JOIN,
-                        n.tableRefWithAlias(n.tableRef(targetTable), targetTableAlias),
-                        n.compare(
-                            n.field(foreignKey ?? guessForeignKey(parentTable), targetTableAlias),
+                        new n.TableRefWithAlias(new n.TableRef(targetTable), targetTableAlias),
+                        new n.Compare(
+                            new n.Field(foreignKey ?? guessForeignKey(parentTable), targetTableAlias),
                             '=',
-                            n.field('id', parentTableAlias)
+                            new n.Field('id', parentTableAlias)
                         )
                     )
                 }
 
-                const subStatement = n.selectStatement()
+                const subStatement = new n.SelectStatement()
 
                 itemsToSql(items, subStatement, subCtx)
 
-                subStatement.convertFieldsToJsonAgg(name, n.field('id', targetTableAlias))
+                subStatement.convertFieldsToJsonAgg(name, new n.Field('id', targetTableAlias))
 
                 statement.fields.append(subStatement.fields)
                 subStatement.copyWhereClause(statement)
 
-                statement.addGroupBy(n.field('id', parentTableAlias))
+                statement.addGroupBy(new n.Field('id', parentTableAlias))
             } else {
                 /*
                     Aggregrate before join for complex constructs where we are nested a couple of levels
                 */
 
-                const derivedJoinTable = n.selectStatement()
+                const derivedJoinTable = new n.SelectStatement()
                 derivedJoinTable.source(targetTable, targetTableAlias)
 
                 itemsToSql(
@@ -170,23 +169,23 @@ export function createNestedTabularSource(options: TabularSourceOptions, relType
 
                 derivedJoinTable.convertFieldsToJsonAgg('data')
 
-                let foreignField: nodeTypes.TableFieldRef
+                let foreignField: n.Field
                 if (through) {
                     const joinAlias = ctx.genTableAlias()
 
-                    foreignField = n.field('id', joinAlias)
+                    foreignField = new n.Field('id', joinAlias)
 
                     derivedJoinTable.joins.add(
                         JoinType.INNER_JOIN,
-                        n.tableRefWithAlias(n.tableRef(through.table), joinAlias),
-                        n.compare(
-                            n.field(guessForeignKey(through.table), targetTableAlias),
+                        new n.TableRefWithAlias(new n.TableRef(through.table), joinAlias),
+                        new n.Compare(
+                            new n.Field(guessForeignKey(through.table), targetTableAlias),
                             '=',
-                            n.field('id', joinAlias),
+                            new n.Field('id', joinAlias),
                         )
                     )
                 } else {
-                    foreignField = n.field(foreignKey ?? guessForeignKey(parentTable), targetTableAlias)
+                    foreignField = new n.Field(foreignKey ?? guessForeignKey(parentTable), targetTableAlias)
                 }
 
                 derivedJoinTable.fields.add(foreignField, 'group')
@@ -196,22 +195,22 @@ export function createNestedTabularSource(options: TabularSourceOptions, relType
 
                 statement.joins.add(
                     JoinType.LEFT_JOIN,
-                    n.derivedTable(derivedJoinTable, derivedAlias),
-                    n.compare(
-                        n.field('group', derivedAlias),
+                    new n.DerivedTable(derivedJoinTable, derivedAlias),
+                    new n.Compare(
+                        new n.Field('group', derivedAlias),
                         '=',
-                        n.field('id', parentTableAlias)
+                        new n.Field('id', parentTableAlias)
                     )
                 )
 
-                statement.fields.add(n.field('data', derivedAlias), name)
+                statement.fields.add(new n.Field('data', derivedAlias), name)
             }
         } else if (relType === 'one') {
             /*
                 One to one relation
             */
 
-            const subStatement = n.selectStatement()
+            const subStatement = new n.SelectStatement()
 
             itemsToSql(items, subStatement, subCtx)
 
@@ -222,31 +221,31 @@ export function createNestedTabularSource(options: TabularSourceOptions, relType
 
                 statement.joins.add(
                     JoinType.LEFT_JOIN,
-                    n.tableRefWithAlias(n.tableRef(through.table), joinAlias),
-                    n.compare(
-                        n.field(through.foreignKey ?? guessForeignKey(through.table), parentTableAlias),
+                    new n.TableRefWithAlias(new n.TableRef(through.table), joinAlias),
+                    new n.Compare(
+                        new n.Field(through.foreignKey ?? guessForeignKey(through.table), parentTableAlias),
                         '=',
-                        n.field('id', joinAlias),
+                        new n.Field('id', joinAlias),
                     )
                 )
 
                 statement.joins.add(
                     JoinType.INNER_JOIN,
-                    n.tableRefWithAlias(n.tableRef(targetTable), targetTableAlias),
-                    n.compare(
-                        n.field('id', targetTableAlias),
+                    new n.TableRefWithAlias(new n.TableRef(targetTable), targetTableAlias),
+                    new n.Compare(
+                        new n.Field('id', targetTableAlias),
                         '=',
-                        n.field(foreignKey ?? guessForeignKey(targetTable), joinAlias)
+                        new n.Field(foreignKey ?? guessForeignKey(targetTable), joinAlias)
                     )
                 )
             } else {
                 statement.joins.add(
                     JoinType.LEFT_JOIN,
-                    n.tableRefWithAlias(n.tableRef(targetTable), targetTableAlias),
-                    n.compare(
-                        n.field(foreignKey ?? guessForeignKey(parentTable), parentTableAlias),
+                    new n.TableRefWithAlias(new n.TableRef(targetTable), targetTableAlias),
+                    new n.Compare(
+                        new n.Field(foreignKey ?? guessForeignKey(parentTable), parentTableAlias),
                         '=',
-                        n.field('id', targetTableAlias)
+                        new n.Field('id', targetTableAlias)
                     )
                 )
             }
@@ -380,6 +379,6 @@ function guessForeignKey(tableName: string) {
     return `${tableName.toLowerCase()}_id`
 }
 
-function itemsToSql(items: readonly Item[], statement: nodeTypes.SelectStatement, ctx: GraphToSqlContext) {
+function itemsToSql(items: readonly Item[], statement: n.SelectStatement, ctx: GraphToSqlContext) {
     items.forEach(item => item[toSqlKey](statement, ctx))
 }
