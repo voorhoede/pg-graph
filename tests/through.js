@@ -13,14 +13,6 @@ test('should be able to get all comments belonging to the blogs of user "Remco"'
 
     const query = graphQuery()
 
-    // query.source('comment', comment => {
-    //     comment.alias('comments')
-
-    //     comment
-    //         .through('')
-    //         .one('user', '')
-    // })
-
     query.source('user', user => {
         user.field('name')
 
