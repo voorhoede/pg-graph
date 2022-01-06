@@ -12,7 +12,7 @@ test('can create separate and conditions', async (t) => {
 
     result.node.toSql(ctx)
 
-    t.equal(ctx.formatter.toString(), 'value1 = $1::text AND value2 = $2::text')
+    t.equal(ctx.formatter.toString(), '"value1" = $1::text AND "value2" = $2::text')
 
     t.end()
 })
@@ -26,7 +26,7 @@ test('can create separate or conditions', async (t) => {
 
     result.node.toSql(ctx)
 
-    t.equal(ctx.formatter.toString(), 'value1 = $1::text OR value2 = $2::text')
+    t.equal(ctx.formatter.toString(), '"value1" = $1::text OR "value2" = $2::text')
 
     t.end()
 })
@@ -50,7 +50,7 @@ test('can create groups', async (t) => {
 
     result.node.toSql(ctx)
 
-    t.equal(ctx.formatter.toString(), '(value1 = $1::text OR value2 = $2::text AND (value3 = $1::text OR value4 = $2::text)) AND (value5 = $1::text OR value6 = $2::text)')
+    t.equal(ctx.formatter.toString(), '("value1" = $1::text OR "value2" = $2::text AND ("value3" = $1::text OR "value4" = $2::text)) AND ("value5" = $1::text OR "value6" = $2::text)')
 
     t.end()
 })

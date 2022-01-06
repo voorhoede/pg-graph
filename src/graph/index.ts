@@ -5,6 +5,10 @@ import { toSqlKey } from "./types";
 import { createFormatter } from "../sql-ast/formatting";
 import { createNodeToSqlContext } from "../sql-ast/context";
 
+export type GraphQueryToSqlOptions = {
+    prettifyJson?: boolean
+}
+
 export function graphQuery() {
     const sources: TabularSource[] = [];
     const graphBuildContext: GraphBuildContext = createGraphBuildContext()
@@ -19,7 +23,7 @@ export function graphQuery() {
             sources.push(item)
             return item;
         },
-        toSql(): string {
+        toSql(options?: GraphQueryToSqlOptions): string {
             const statement = new n.SelectStatement()
             const graphToSqlCtx = createGraphToSqlContext()
 
@@ -27,7 +31,10 @@ export function graphQuery() {
                 source[toSqlKey](statement, graphToSqlCtx)
             })
 
-            statement.convertFieldsToJsonObject('data')
+            if (options?.prettifyJson) {
+                const data = statement.fields.get('data')!
+                statement.fields.set('data', new n.FuncCall('jsonb_pretty', data))
+            }
 
             const formatter = createFormatter()
 

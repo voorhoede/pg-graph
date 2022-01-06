@@ -6,14 +6,16 @@ import { createWhereClause, Where } from "./where-clause"
 import { createField, Field } from "./field"
 import { createValue, Value } from "./value"
 import { createOrderBy, OrderBy } from "./order-by"
+import { createAgg, Agg } from './agg'
 
-import { n, ValidComparisonSign, JoinType } from "../sql-ast";
+import { n, ValidComparisonSign, JoinType, json } from "../sql-ast";
 import { OrderDirection } from "../sql-ast/types"
 
 export type TabularSourceBuilder = (s: TabularSource) => void
 
 export type TabularSource = {
     type: GraphItemTypes.TABLE,
+    agg(): TabularSource,
     alias(name: string): TabularSource,
     where(name: string, sign: ValidComparisonSign, value: any): TabularSource,
     where(fn: (builder: WhereBuilder) => void): TabularSource,
@@ -50,7 +52,7 @@ type Through = {
     foreignKey?: string
 }
 
-type Item = TabularSource | Field | Value | Where | OrderBy;
+type Item = TabularSource | Field | Value | Where | OrderBy | Agg;
 
 export type NestedRelationType = 'many' | 'one';
 
@@ -69,23 +71,28 @@ export function createRootTabularSource(options: TabularSourceOptions) {
 
         // we create a cte that uses json_build_object to build the result
         const cteSelect = new n.SelectStatement()
-        cteSelect.source(targetTable, alias)
+        cteSelect.source = new n.TableRefWithAlias(new n.TableRef(targetTable), alias)
 
         // apply all items to the cteSelect
         itemsToSql(items, cteSelect, subCtx)
 
-        cteSelect.convertFieldsToJsonObject('data')
+        json.convertDataFieldsToAgg(cteSelect)
 
         // todo check if the cte already exists?
-        statement.addCte(new n.Cte(`${name}Cte`, cteSelect))
+        const cte = new n.Cte(`${name}Cte`, cteSelect)
+        statement.ctes.push(cte)
 
-        // we use a json_agg with the result of the cte to make sure that we only get one row
-        const cteName = `${name}Cte`
-        const subSelect = new n.SelectStatement()
-        subSelect.source(cteName)
-        subSelect.addField(new n.FuncCall('json_agg', new n.Field('data', cteName)))
+        if (!statement.source) {
+            statement.source = new n.TableRef(cte.name)
+        } else {
+            statement.joins.push(new n.Join(JoinType.CROSS_JOIN, new n.TableRef(cte.name)))
+        }
 
-        statement.addField(new n.Subquery(subSelect), name)
+        json.addReferencesToChildFields({
+            withPrefix: name,
+            dest: statement,
+            src: cte,
+        })
     })
 }
 
@@ -94,7 +101,6 @@ export function createNestedTabularSource(options: TabularSourceOptions, relType
         const parentTableAlias = ctx.tableAlias!
         const parentTable = ctx.table!
         const targetTableAlias = ctx.genTableAlias()
-        const parentSubRelationCount = ctx.subRelationCount
 
         const subTabularSourceItems = getTabularItemsCount(items)
 
@@ -104,110 +110,64 @@ export function createNestedTabularSource(options: TabularSourceOptions, relType
         subCtx.subRelationCount = subTabularSourceItems;
 
         if (relType === 'many') {
-            if (ctx.depth === 1 && !subTabularSourceItems && parentSubRelationCount === 1) {
-                /*
-                    Aggregrate after join for very simple constructs
-                */
 
-                if (through) {
-                    // todo make this a loop
+            /*
+                Aggregrate before join for complex constructs where we are nested a couple of levels
+            */
 
-                    const joinAlias = ctx.genTableAlias()
+            const subStatement = new n.SelectStatement()
+            subStatement.source = new n.TableRefWithAlias(new n.TableRef(targetTable), targetTableAlias)
 
-                    statement.addJoin(new n.Join(
-                        JoinType.LEFT_JOIN,
-                        new n.TableRefWithAlias(new n.TableRef(through.table), joinAlias),
-                        new n.Compare(
-                            new n.Field(through.foreignKey ?? guessForeignKey(through.table), joinAlias),
-                            '=',
-                            new n.Field('id', parentTableAlias),
-                        )
-                    ))
+            itemsToSql(
+                items,
+                subStatement,
+                subCtx
+            )
 
-                    statement.addJoin(new n.Join(
-                        JoinType.INNER_JOIN,
-                        new n.TableRefWithAlias(new n.TableRef(targetTable), targetTableAlias),
-                        new n.Compare(
-                            new n.Field(guessForeignKey(through.table), targetTableAlias),
-                            '=',
-                            new n.Field('id', joinAlias)
-                        )
-                    ))
-                } else {
-                    statement.addJoin(new n.Join(
-                        JoinType.LEFT_JOIN,
-                        new n.TableRefWithAlias(new n.TableRef(targetTable), targetTableAlias),
-                        new n.Compare(
-                            new n.Field(foreignKey ?? guessForeignKey(parentTable), targetTableAlias),
-                            '=',
-                            new n.Field('id', parentTableAlias)
-                        )
-                    ))
-                }
+            json.convertDataFieldsToAgg(subStatement)
 
-                const subStatement = new n.SelectStatement()
+            let foreignField: n.Field
+            if (through) {
+                // todo make this a loop
 
-                itemsToSql(items, subStatement, subCtx)
+                const joinAlias = ctx.genTableAlias()
 
-                subStatement.convertFieldsToJsonAgg(name, new n.Field('id', targetTableAlias))
-                subStatement.copyFields(statement)
-                subStatement.copyWhereClause(statement)
+                foreignField = new n.Field('id', joinAlias)
 
-                statement.addGroupBy(new n.Field('id', parentTableAlias))
-            } else {
-                /*
-                    Aggregrate before join for complex constructs where we are nested a couple of levels
-                */
-
-                const derivedJoinTable = new n.SelectStatement()
-                derivedJoinTable.source(targetTable, targetTableAlias)
-
-                itemsToSql(
-                    items,
-                    derivedJoinTable,
-                    subCtx
-                )
-
-                derivedJoinTable.convertFieldsToJsonAgg('data')
-
-                let foreignField: n.Field
-                if (through) {
-                    // todo make this a loop
-
-                    const joinAlias = ctx.genTableAlias()
-
-                    foreignField = new n.Field('id', joinAlias)
-
-                    derivedJoinTable.addJoin(new n.Join(
-                        JoinType.INNER_JOIN,
-                        new n.TableRefWithAlias(new n.TableRef(through.table), joinAlias),
-                        new n.Compare(
-                            new n.Field(guessForeignKey(through.table), targetTableAlias),
-                            '=',
-                            new n.Field('id', joinAlias),
-                        )
-                    ))
-                } else {
-                    foreignField = new n.Field(foreignKey ?? guessForeignKey(parentTable), targetTableAlias)
-                }
-
-                derivedJoinTable.addField(foreignField, 'group')
-                derivedJoinTable.addGroupBy(foreignField)
-
-                const derivedAlias = ctx.genTableAlias();
-
-                statement.addJoin(new n.Join(
-                    JoinType.LEFT_JOIN,
-                    new n.DerivedTable(derivedJoinTable, derivedAlias),
+                subStatement.joins.push(new n.Join(
+                    JoinType.INNER_JOIN,
+                    new n.TableRefWithAlias(new n.TableRef(through.table), joinAlias),
                     new n.Compare(
-                        new n.Field('group', derivedAlias),
+                        new n.Field(guessForeignKey(through.table), targetTableAlias),
                         '=',
-                        new n.Field('id', parentTableAlias)
+                        new n.Field('id', joinAlias),
                     )
                 ))
-
-                statement.addField(new n.Field('data', derivedAlias), name)
+            } else {
+                foreignField = new n.Field(foreignKey ?? guessForeignKey(parentTable), targetTableAlias)
             }
+
+            subStatement.fields.add(foreignField, json.createHiddenFieldName('group'))
+            subStatement.groupBys.push(foreignField)
+
+            const derivedAlias = ctx.genTableAlias();
+            const derivedTable = new n.DerivedTable(subStatement, derivedAlias)
+
+            statement.joins.push(new n.Join(
+                JoinType.LEFT_JOIN,
+                derivedTable,
+                new n.Compare(
+                    new n.Field(json.createHiddenFieldName('group'), derivedAlias),
+                    '=',
+                    new n.Field('id', parentTableAlias)
+                )
+            ))
+
+            json.addReferencesToChildFields({
+                src: derivedTable,
+                dest: statement,
+                withPrefix: name,
+            })
         } else if (relType === 'one') {
             /*
                 One to one relation
@@ -217,14 +177,12 @@ export function createNestedTabularSource(options: TabularSourceOptions, relType
 
             itemsToSql(items, subStatement, subCtx)
 
-            subStatement.convertFieldsToJsonObject(name)
-
             if (through) {
                 const joinAlias = ctx.genTableAlias()
 
                 // todo make this a loop
 
-                statement.addJoin(new n.Join(
+                statement.joins.push(new n.Join(
                     JoinType.LEFT_JOIN,
                     new n.TableRefWithAlias(new n.TableRef(through.table), joinAlias),
                     new n.Compare(
@@ -234,7 +192,7 @@ export function createNestedTabularSource(options: TabularSourceOptions, relType
                     )
                 ))
 
-                statement.addJoin(new n.Join(
+                statement.joins.push(new n.Join(
                     JoinType.INNER_JOIN,
                     new n.TableRefWithAlias(new n.TableRef(targetTable), targetTableAlias),
                     new n.Compare(
@@ -244,7 +202,7 @@ export function createNestedTabularSource(options: TabularSourceOptions, relType
                     )
                 ))
             } else {
-                statement.addJoin(new n.Join(
+                statement.joins.push(new n.Join(
                     JoinType.LEFT_JOIN,
                     new n.TableRefWithAlias(new n.TableRef(targetTable), targetTableAlias),
                     new n.Compare(
@@ -255,8 +213,9 @@ export function createNestedTabularSource(options: TabularSourceOptions, relType
                 ))
             }
 
-            subStatement.copyFields(statement)
-            subStatement.copyWhereClause(statement)
+            json.copyFieldsInto(subStatement, statement, 'data', name)
+
+            subStatement.copyWhereClauseTo(statement)
 
         } else {
             (relType as never)
@@ -307,6 +266,10 @@ function createBaseTabularSource({ ctx, name, builder }: TabularSourceOptions, t
 
     const instance: TabularSource = {
         type: GraphItemTypes.TABLE,
+        agg() {
+            items.push(createAgg())
+            return this
+        },
         through(table: string, foreignKey?: string) {
             const initialThrough: Through = {
                 table,

@@ -7,6 +7,15 @@ function formatCast(name?: string) {
     return name ? '::' + name : ''
 }
 
+export class Operator {
+    constructor(public left: FuncCall | AggCall | RawValue | Field | Subquery | Operator, public operator: string, public right: FuncCall | AggCall | RawValue | Field | Subquery | Operator) { }
+    public toSql(ctx: NodeToSqlContext) {
+        this.left.toSql(ctx)
+        ctx.formatter.write(' ' + this.operator + ' ')
+        this.right.toSql(ctx)
+    }
+}
+
 export class WindowFilter {
     constructor(public node: FuncCall | AggCall, public where: Where) { }
     public toSql(ctx: NodeToSqlContext) {
@@ -126,7 +135,8 @@ export class FuncCall {
     }
     toSql(ctx: NodeToSqlContext) {
         ctx.formatter.write(`${this.name}(`)
-        if (this.name === 'json_build_object') {
+
+        if (this.name === 'jsonb_build_object') {
             ctx.formatter
                 .break()
                 .startIndent()
@@ -139,7 +149,22 @@ export class FuncCall {
                 .endIndent()
                 .break()
         } else {
-            ctx.formatter.join(this.args, arg => arg.toSql(ctx), ', ')
+            const containsFuncCalls = this.args.some(arg => (arg instanceof FuncCall || arg instanceof AggCall))
+
+            if (containsFuncCalls) {
+                ctx.formatter.break()
+
+                ctx.formatter.join(this.args, arg => {
+                    ctx.formatter.break()
+                    ctx.formatter.startIndent()
+                    arg.toSql(ctx)
+                    ctx.formatter.endIndent()
+                }, ', ')
+                ctx.formatter.break()
+            } else {
+                ctx.formatter.join(this.args, arg => arg.toSql(ctx), ', ')
+            }
+
         }
         ctx.formatter.write(`)`)
     }
@@ -148,9 +173,25 @@ export class FuncCall {
 export class AggCall {
     constructor(public name: string, public args: SqlNode[], public orderBy?: OrderBy) { }
     toSql(ctx: NodeToSqlContext) {
+        ctx.formatter.write(`${this.name}(`)
+
+        const containsFuncCalls = this.args.some(arg => (arg instanceof FuncCall || arg instanceof AggCall))
+
+        if (containsFuncCalls) {
+            ctx.formatter.break()
+
+            ctx.formatter.join(this.args, arg => {
+                ctx.formatter.break()
+                ctx.formatter.startIndent()
+                arg.toSql(ctx)
+                ctx.formatter.endIndent()
+            }, ', ')
+            ctx.formatter.break()
+        } else {
+            ctx.formatter.join(this.args, arg => arg.toSql(ctx), ', ')
+        }
+
         ctx.formatter
-            .write(`${this.name}(`)
-            .join(this.args, arg => arg.toSql(ctx), ', ')
             .write(`${this.orderBy ? ' ' + this.orderBy.toSql(ctx) : ''}`)
             .write(`)`)
     }
@@ -227,9 +268,9 @@ export class Field {
         const resolvedTable = this.table ?? ctx.table
         if (typeof resolvedTable === 'string') {
             new TableRef(resolvedTable).toSql(ctx)
-            ctx.formatter.write(`.${this.field}${formatCast(this.cast)}`)
+            ctx.formatter.write(`."${this.field}"${formatCast(this.cast)}`)
         } else {
-            ctx.formatter.write(`${this.field}${formatCast(this.cast)}`)
+            ctx.formatter.write(`"${this.field}"${formatCast(this.cast)}`)
         }
     }
 }
@@ -282,45 +323,43 @@ export class Placeholder {
 }
 
 export class Join {
-    constructor(public type: JoinType, public src: DerivedTable | TableRef | TableRefWithAlias, public compare: Compare | Identifier | RawValue) { }
+    constructor(public type: JoinType, public src: DerivedTable | TableRef | TableRefWithAlias, public compare?: Compare | Identifier | RawValue) { }
     toSql(ctx: NodeToSqlContext) {
         ctx.formatter
             .writeLine(`${this.type}`)
             .break()
             .startIndent()
         this.src.toSql(ctx)
-        ctx.formatter.write(` ON `)
-        this.compare.toSql(ctx)
+        if (this.compare) {
+            ctx.formatter.write(` ON `)
+            this.compare.toSql(ctx)
+        }
         ctx.formatter.endIndent()
     }
 }
 
-type SelectField = Field | Subquery | FuncCall | RawValue | Placeholder
+export type SelectField = Field | Subquery | FuncCall | RawValue | Placeholder | Group
 
 function createFieldCollection() {
     let fields: Array<{ sql: SelectField, alias?: string }> = []
 
-    function jsonBuildObject() {
-        if (!fields.length) {
-            return new RawValue('{}', 'json')
-        } else {
-            return new FuncCall('json_build_object', ...flattened())
-        }
-    }
-
-    function flattened() {
-        const args: Array<SqlNode> = [];
-        fields.forEach(field => {
-            args.push(new RawValue(field.alias))
-            args.push(field.sql)
-        })
-
-        return args
-    }
-
     return {
         add(sql: SelectField, alias?: string) {
             fields.push({ sql, alias })
+        },
+        get(alias: string) {
+            return fields.find(field => field.alias === alias)?.sql
+        },
+        set(alias: string, sql: SelectField) {
+            fields = fields.map(field => {
+                if (field.alias === alias) {
+                    return {
+                        sql,
+                        alias,
+                    }
+                }
+                return field
+            })
         },
         toSql(ctx: NodeToSqlContext) {
             if (!fields.length) {
@@ -333,51 +372,8 @@ function createFieldCollection() {
                     ctx.formatter.break()
                 }
                 field.sql.toSql(ctx)
-                ctx.formatter.write(field.alias ? ` as ${field.alias}` : '')
+                ctx.formatter.write(field.alias ? ` AS "${field.alias}"` : '')
             }, ',')
-        },
-        convertToJsonObject(alias?: string) {
-            if (fields.length) {
-                fields = [{ sql: jsonBuildObject(), alias }]
-            }
-        },
-        convertToJsonAgg(alias?: string, nullField?: Field, orderBy?: OrderBy) {
-            if (!fields.length) {
-                return
-            }
-
-            const call = new AggCall('json_agg', [
-                jsonBuildObject(),
-            ], orderBy)
-
-            if (nullField) {
-                fields = [{
-                    sql: new FuncCall('coalesce',
-                        new WindowFilter(
-                            call,
-                            new Where(
-                                new Compare(
-                                    nullField,
-                                    'IS NOT',
-                                    Identifier.null
-                                )
-                            )
-                        ),
-                        new RawValue('[]', 'json')
-                    ),
-                    alias
-                }]
-            } else {
-                fields = [{
-                    sql: new FuncCall('coalesce',
-                        new FuncCall('json_agg',
-                            jsonBuildObject()
-                        ),
-                        new RawValue('[]', 'json')
-                    ),
-                    alias
-                }]
-            }
         },
         get length() {
             return fields.length
@@ -389,77 +385,46 @@ function createFieldCollection() {
 }
 
 export class SelectStatement {
-    private fields = createFieldCollection()
-    private joins: Join[] = [];
-    private ctes: Cte[] = [];
-    private groupBys: Field[] = [];
-    private orderByColumns: OrderByColumn[] = []
-    private sources: Array<TableRef | TableRefWithAlias> = []
-    private mainTableSource?: string;
-    private whereClauseChain: WhereBuilderResultNode | null = null;
+    public readonly fields = createFieldCollection()
+    public joins: Join[] = [];
+    public ctes: Cte[] = [];
+    public groupBys: Field[] = [];
+    public orderByColumns: OrderByColumn[] = []
+    public source?: TableRefWithAlias | TableRef;
+    private whereClauseChain?: WhereBuilderResultNode;
 
-    constructor() { }
-
-    addCte(node: Cte) {
-        this.ctes.push(node)
+    hasWhereClause() {
+        return !!this.whereClauseChain
     }
+
     addWhereClause(node: Exclude<WhereBuilderResultNode, null>) {
         this.whereClauseChain = this.whereClauseChain ? new And(this.whereClauseChain, node) : node
     }
-    convertFieldsToJsonAgg(alias?: string, nullField?: Field) {
-        this.fields.convertToJsonAgg(alias, nullField, this.orderByColumns.length ? new OrderBy(...this.orderByColumns) : undefined)
-        this.orderByColumns.length = 0
+    copyOrderBysTo(other: SelectStatement) {
+        other.orderByColumns = other.orderByColumns.concat(this.orderByColumns)
     }
-    convertFieldsToJsonObject(alias?: string) {
-        this.fields.convertToJsonObject(alias)
+    copyGroupBysTo(other: SelectStatement) {
+        other.groupBys = other.groupBys.concat(this.groupBys)
     }
-    source(tableName: string, alias?: string) {
-        this.mainTableSource = alias ?? tableName //anonymous fields will be resolved to the main table source
-
-        const ref = new TableRef(tableName)
-        this.sources.push(alias ? new TableRefWithAlias(ref, alias) : ref)
-    }
-    addJoin(sql: Join) {
-        this.joins.push(sql)
-    }
-    addGroupBy(sql: Field) {
-        this.groupBys.push(sql)
-    }
-    addOrderBy(sql: OrderByColumn) {
-        this.orderByColumns.push(sql)
-    }
-    addField(field: SelectField, alias?: string) {
-        this.fields.add(field, alias)
-    }
-    copyOrderBys(other: SelectStatement) {
-        this.orderByColumns.forEach(orderBy => {
-            other.addOrderBy(orderBy)
-        })
-    }
-    copyGroupBys(other: SelectStatement) {
-        this.groupBys.forEach(groupBy => {
-            other.addGroupBy(groupBy)
-        })
-    }
-    copyWhereClause(other: SelectStatement) {
+    copyWhereClauseTo(other: SelectStatement) {
         if (this.whereClauseChain) {
             other.addWhereClause(this.whereClauseChain)
         }
     }
-    copyFields(other: SelectStatement) {
+    copyFieldsTo(other: SelectStatement) {
         for (let { sql, alias } of this.fields) {
-            other.addField(sql, alias)
+            other.fields.add(sql, alias)
         }
     }
     toSql(ctx: NodeToSqlContext) {
         const subCtx: NodeToSqlContext = {
-            table: this.mainTableSource,
+            table: this.source instanceof TableRef ? this.source.name : this.source?.ref.name,
             formatter: ctx.formatter,
         };
 
         if (this.ctes.length) {
             ctx.formatter.writeLine('WITH')
-            this.ctes.forEach(cte => cte.toSql(subCtx))
+            ctx.formatter.join(this.ctes, cte => cte.toSql(subCtx), ', ')
         }
 
         ctx.formatter
@@ -472,17 +437,20 @@ export class SelectStatement {
 
         ctx.formatter.endIndent()
 
-        if (this.sources.length) {
+        if (this.source) {
             ctx.formatter
                 .writeLine('FROM ')
                 .break()
                 .startIndent()
-                .join(this.sources, source => {
-                    source.toSql(subCtx)
-                }, ', ')
+
+            this.source.toSql(subCtx)
+
+            ctx.formatter
                 .break()
                 .endIndent()
         }
+
+        // todo join is only allowed when a main source was set
 
         ctx.formatter.joinLines(this.joins, join => {
             join.toSql(subCtx)

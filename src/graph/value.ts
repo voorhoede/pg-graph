@@ -1,3 +1,4 @@
+import { json } from "../sql-ast"
 import { GraphBuildContext } from "./context"
 import { GraphItemTypes, ToSql, toSqlKey } from "./types"
 
@@ -11,7 +12,7 @@ export function createValue(jsonProp: string, value: any, ctx: GraphBuildContext
     return {
         type: GraphItemTypes.VALUE,
         [toSqlKey](statement) {
-            statement.addField(placeholder, jsonProp)
+            json.addField(statement, 'data', jsonProp, placeholder)
         }
     }
 }

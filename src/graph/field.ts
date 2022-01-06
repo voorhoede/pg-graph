@@ -1,5 +1,7 @@
 import { GraphItemTypes, ToSql, toSqlKey } from "./types";
 import * as n from "../sql-ast/nodes";
+import { json } from "../sql-ast";
+import { BuiltinGroups } from "../sql-ast/json-utils";
 
 export type Field = {
     type: GraphItemTypes.FIELD,
@@ -16,7 +18,7 @@ export function createField(name: string): Field {
             return this
         },
         [toSqlKey](statement, ctx) {
-            statement.addField(new n.Field(name, ctx.tableAlias), jsonProp)
+            json.addField(statement, BuiltinGroups.Data, jsonProp, new n.Field(name, ctx.tableAlias))
         }
     }
 }

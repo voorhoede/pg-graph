@@ -6,9 +6,7 @@
         "target": "ESNext",
         "outDir": "dist",
         "module": "CommonJS",
-        "types": [
-            "node"
-        ]
+        "types": []
     },
     "files": [
         "src/index.ts"
