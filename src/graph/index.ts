@@ -1,6 +1,6 @@
 import { createGraphBuildContext, createGraphToSqlContext, GraphBuildContext } from "./context";
 import { createRootTabularSource, TabularSourceBuilder, TabularSource } from "./tabular-source";
-import { n } from "../sql-ast";
+import { json, n } from "../sql-ast";
 import { toSqlKey } from "./types";
 import { createFormatter } from "../sql-ast/formatting";
 import { createNodeToSqlContext } from "../sql-ast/context";
@@ -17,7 +17,7 @@ export function graphQuery() {
         source(name: string, builder: TabularSourceBuilder) {
             const item = createRootTabularSource({
                 ctx: graphBuildContext,
-                name: name,
+                name,
                 builder
             });
             sources.push(item)
@@ -34,6 +34,10 @@ export function graphQuery() {
             if (options?.prettifyJson) {
                 const data = statement.fields.get('data')!
                 statement.fields.set('data', new n.FuncCall('jsonb_pretty', data))
+            }
+
+            if (statement.fields.isEmpty) {
+                json.convertToEmptyDataStatement(statement)
             }
 
             const formatter = createFormatter()

@@ -79,6 +79,11 @@ export function createRootTabularSource(options: TabularSourceOptions) {
 
         json.convertDataFieldsToAgg(cteSelect)
 
+        if (cteSelect.fields.isEmpty) {
+            json.convertToEmptyDataStatement(cteSelect)
+            return
+        }
+
         // todo check if the cte already exists?
         const cte = new n.Cte(`${name}Cte`, cteSelect)
         statement.ctes.push(cte)

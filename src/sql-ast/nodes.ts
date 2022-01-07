@@ -355,6 +355,9 @@ function createFieldCollection() {
         clear() {
             fields.length = 0
         },
+        get isEmpty() {
+            return fields.length === 0
+        },
         add(sql: SelectField, alias?: string) {
             fields.push({ sql, alias })
         },

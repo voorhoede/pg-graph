@@ -12,6 +12,16 @@ export function createHiddenFieldName(fieldName: string) {
     return '_' + fieldName
 }
 
+export function convertToEmptyDataStatement(statement: n.SelectStatement) {
+    statement.fields.clear()
+    statement.fields.add(new n.RawValue('[]', 'json'), 'data')
+    statement.orderByColumns.length = 0
+    statement.groupBys.length = 0
+    statement.source = undefined
+    statement.ctes.length = 0
+    statement.joins.length = 0
+}
+
 export function copyFieldsInto(from: n.SelectStatement, to: n.SelectStatement, group: string, jsonProp: string) {
     const srcData = from.fields.get('data')
     if (srcData) {
