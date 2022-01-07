@@ -12,7 +12,7 @@ export interface WhereBuilderChain {
     or(name: string, comparison: ValidComparisonSign, value: unknown): WhereBuilderChain,
 }
 
-export type WhereBuilderResultNode = n.Compare | n.And | n.Or | n.Group | null
+export type WhereBuilderResultNode = n.Compare | n.And | n.Or | n.Group | undefined
 export type WhereBuilder = (nameOrBuilderHandler: ((b: WhereBuilder) => void) | string, comparison?: ValidComparisonSign, value?: unknown) => WhereBuilderChain
 export type WhereBuilderResult = {
     setTableContext(name: string): void
@@ -31,7 +31,7 @@ export function createWhereBuilder(ctx: GraphBuildContext): Output {
     const fields: n.Field[] = []
 
     function createBuilderGroup(groupOp: LogicalOpType): Output {
-        let resultNode: WhereBuilderResultNode = null
+        let resultNode: WhereBuilderResultNode = undefined
 
         const add = (op: LogicalOpType) => (nameOrBuilderHandler: ((b: WhereBuilder) => void) | string, comparison?: ValidComparisonSign, value?: unknown): WhereBuilderChain => {
             if (typeof nameOrBuilderHandler === 'string') { // name, comparison, value

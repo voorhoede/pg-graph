@@ -3,7 +3,7 @@ import * as n from "./nodes";
 export type SqlNode =
     n.Where |
     n.AggCall |
-    n.AllFields |
+    n.All |
     n.And |
     n.Compare |
     n.Cte |

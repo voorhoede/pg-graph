@@ -171,7 +171,7 @@ export class FuncCall {
 }
 
 export class AggCall {
-    constructor(public name: string, public args: SqlNode[], public orderBy?: OrderBy) { }
+    constructor(public name: string, public args: SqlNode[], public orderBy?: OrderBy, public filter?: SqlNode) { }
     toSql(ctx: NodeToSqlContext) {
         ctx.formatter.write(`${this.name}(`)
 
@@ -202,6 +202,17 @@ export class AggCall {
         }
 
         ctx.formatter.write(`)`)
+
+        if (this.filter) {
+            ctx.formatter
+                .write(' FILTER (')
+                .startIndent()
+            new Where(this.filter).toSql(ctx)
+            ctx.formatter
+                .endIndent()
+                .break()
+                .write(')')
+        }
     }
 }
 
@@ -242,7 +253,7 @@ export class TableRef {
         return new Field(fieldName, this.name, cast)
     }
     allFields() {
-        return new AllFields(this.name)
+        return new All(this.name)
     }
     toSql(ctx: NodeToSqlContext) {
         ctx.formatter.write(`"${this.name}"`)
@@ -257,7 +268,7 @@ export class TableRefWithAlias {
     }
 }
 
-export class AllFields {
+export class All {
     constructor(public table?: string) { }
     toSql(ctx: NodeToSqlContext) {
         const resolvedTable = this.table ?? ctx.table
@@ -411,7 +422,7 @@ export class SelectStatement {
         return !!this.whereClauseChain
     }
 
-    addWhereClause(node: Exclude<WhereBuilderResultNode, null>) {
+    addWhereClause(node: Exclude<WhereBuilderResultNode, undefined>) {
         this.whereClauseChain = this.whereClauseChain ? new And(this.whereClauseChain, node) : node
     }
     copyOrderBysTo(other: SelectStatement) {
