@@ -1,5 +1,6 @@
 import { GraphBuildContext, GraphToSqlContext } from "./context"
 import { createWhereBuilder, WhereBuilder } from "./where-builder"
+import { createAggBuilder, AggBuilder } from "./agg-builder"
 import { GraphItemTypes, ToSql, toSqlKey } from "./types"
 
 import { createWhereClause, Where } from "./where-clause"
@@ -15,7 +16,7 @@ export type TabularSourceBuilder = (s: TabularSource) => void
 
 export type TabularSource = {
     type: GraphItemTypes.TABLE,
-    agg(): TabularSource,
+    agg(builderHandler: (builder: AggBuilder) => void): TabularSource,
     alias(name: string): TabularSource,
     where(name: string, sign: ValidComparisonSign, value: any): TabularSource,
     where(fn: (builder: WhereBuilder) => void): TabularSource,
@@ -266,8 +267,10 @@ function createBaseTabularSource({ ctx, name, builder }: TabularSourceOptions, t
 
     const instance: TabularSource = {
         type: GraphItemTypes.TABLE,
-        agg() {
-            items.push(createAgg())
+        agg(builderHandler: (builder: AggBuilder) => void) {
+            const { builder, result } = createAggBuilder(ctx)
+            builderHandler(builder)
+            items.push(createAgg(result))
             return this
         },
         through(table: string, foreignKey?: string) {
@@ -298,12 +301,12 @@ function createBaseTabularSource({ ctx, name, builder }: TabularSourceOptions, t
             items.push(item)
             return item
         },
-        where(nameOrBuilder: ((builder: WhereBuilder) => void) | string, sign?: ValidComparisonSign, value?: any) {
+        where(nameOrBuilderHandler: ((builder: WhereBuilder) => void) | string, sign?: ValidComparisonSign, value?: any) {
             const { builder, result } = createWhereBuilder(ctx)
-            if (typeof nameOrBuilder === 'function') {
-                nameOrBuilder(builder)
+            if (typeof nameOrBuilderHandler === 'function') {
+                nameOrBuilderHandler(builder)
             } else {
-                builder(nameOrBuilder, sign!, value)
+                builder(nameOrBuilderHandler, sign!, value)
             }
             items.push(createWhereClause(result))
             return this

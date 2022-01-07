@@ -191,9 +191,17 @@ export class AggCall {
             ctx.formatter.join(this.args, arg => arg.toSql(ctx), ', ')
         }
 
-        ctx.formatter
-            .write(`${this.orderBy ? ' ' + this.orderBy.toSql(ctx) : ''}`)
-            .write(`)`)
+        if (this.orderBy) {
+            ctx.formatter
+                .break()
+                .startIndent()
+            this.orderBy.toSql(ctx)
+            ctx.formatter
+                .endIndent()
+                .break()
+        }
+
+        ctx.formatter.write(`)`)
     }
 }
 
@@ -344,6 +352,9 @@ function createFieldCollection() {
     let fields: Array<{ sql: SelectField, alias?: string }> = []
 
     return {
+        clear() {
+            fields.length = 0
+        },
         add(sql: SelectField, alias?: string) {
             fields.push({ sql, alias })
         },
