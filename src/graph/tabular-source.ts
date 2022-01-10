@@ -79,14 +79,14 @@ export function createRootTabularSource(options: TabularSourceOptions) {
 
         json.convertDataFieldsToAgg(cteSelect)
 
-        if (cteSelect.fields.isEmpty) {
+        if (cteSelect.fields.size === 0) {
             json.convertToEmptyDataStatement(cteSelect)
             return
         }
 
         // todo check if the cte already exists?
         const cte = new n.Cte(`${name}Cte`, cteSelect)
-        statement.ctes.push(cte)
+        statement.ctes.set(cte.name, cte)
 
         if (!statement.source) {
             statement.source = new n.TableRef(cte.name)
@@ -153,7 +153,7 @@ export function createNestedTabularSource(options: TabularSourceOptions, relType
                 foreignField = new n.Field(foreignKey ?? guessForeignKey(parentTable), targetTableAlias)
             }
 
-            subStatement.fields.add(foreignField, json.createHiddenFieldName('group'))
+            subStatement.fields.set(json.createHiddenFieldName('group'), foreignField)
             subStatement.groupBys.push(foreignField)
 
             const derivedAlias = ctx.genTableAlias();

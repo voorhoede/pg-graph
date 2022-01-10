@@ -14,11 +14,11 @@ export function createHiddenFieldName(fieldName: string) {
 
 export function convertToEmptyDataStatement(statement: n.SelectStatement) {
     statement.fields.clear()
-    statement.fields.add(new n.RawValue('[]', 'json'), 'data')
+    statement.fields.set('data', new n.RawValue('[]', 'json'))
     statement.orderByColumns.length = 0
     statement.groupBys.length = 0
     statement.source = undefined
-    statement.ctes.length = 0
+    statement.ctes.clear()
     statement.joins.length = 0
 }
 
@@ -33,7 +33,7 @@ export function addField(statement: n.SelectStatement, group: string, jsonProp: 
     let dataField: n.FuncCall = statement.fields.get(group) as n.FuncCall
     if (!dataField) {
         dataField = new n.FuncCall('jsonb_build_object');
-        statement.fields.add(dataField, group)
+        statement.fields.set(group, dataField)
     }
     dataField.args.push(new n.RawValue(jsonProp), field)
 }
@@ -102,7 +102,7 @@ export function addReferencesToChildFields({ src, dest, withPrefix }: SpecialFie
         throw new Error('From should be a derived table or Cte (Common Table Expression)')
     }
 
-    for (let { alias } of fromSelect.fields) {
+    for (let [alias,] of fromSelect.fields) {
         if (alias && !isHiddenFieldName(alias)) {
             if (alias === BuiltinGroups.Data) {
                 addField(dest, BuiltinGroups.Data, withPrefix, new n.Field(alias, target))

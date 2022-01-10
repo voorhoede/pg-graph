@@ -36,7 +36,7 @@ export function graphQuery() {
                 statement.fields.set('data', new n.FuncCall('jsonb_pretty', data))
             }
 
-            if (statement.fields.isEmpty) {
+            if (statement.fields.size === 0) {
                 json.convertToEmptyDataStatement(statement)
             }
 

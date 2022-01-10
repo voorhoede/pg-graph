@@ -359,60 +359,10 @@ export class Join {
 
 export type SelectField = Field | Subquery | FuncCall | RawValue | Placeholder | Group
 
-function createFieldCollection() {
-    let fields: Array<{ sql: SelectField, alias?: string }> = []
-
-    return {
-        clear() {
-            fields.length = 0
-        },
-        get isEmpty() {
-            return fields.length === 0
-        },
-        add(sql: SelectField, alias?: string) {
-            fields.push({ sql, alias })
-        },
-        get(alias: string) {
-            return fields.find(field => field.alias === alias)?.sql
-        },
-        set(alias: string, sql: SelectField) {
-            fields = fields.map(field => {
-                if (field.alias === alias) {
-                    return {
-                        sql,
-                        alias,
-                    }
-                }
-                return field
-            })
-        },
-        toSql(ctx: NodeToSqlContext) {
-            if (!fields.length) {
-                ctx.formatter.write('1')
-                return
-            }
-
-            ctx.formatter.join(fields, (field, index) => {
-                if (index > 0) {
-                    ctx.formatter.break()
-                }
-                field.sql.toSql(ctx)
-                ctx.formatter.write(field.alias ? ` AS "${field.alias}"` : '')
-            }, ',')
-        },
-        get length() {
-            return fields.length
-        },
-        [Symbol.iterator]() {
-            return fields[Symbol.iterator]()
-        }
-    }
-}
-
 export class SelectStatement {
-    public readonly fields = createFieldCollection()
+    public fields = new Map<string, SelectField>()
+    public ctes = new Map<string, Cte>()
     public joins: Join[] = [];
-    public ctes: Cte[] = [];
     public groupBys: Field[] = [];
     public orderByColumns: OrderByColumn[] = []
     public source?: TableRefWithAlias | TableRef;
@@ -437,8 +387,8 @@ export class SelectStatement {
         }
     }
     copyFieldsTo(other: SelectStatement) {
-        for (let { sql, alias } of this.fields) {
-            other.fields.add(sql, alias)
+        for (let [key, node] of this.fields.entries()) {
+            other.fields.set(key, node)
         }
     }
     toSql(ctx: NodeToSqlContext) {
@@ -447,9 +397,9 @@ export class SelectStatement {
             formatter: ctx.formatter,
         };
 
-        if (this.ctes.length) {
+        if (this.ctes.size) {
             ctx.formatter.writeLine('WITH')
-            ctx.formatter.join(this.ctes, cte => cte.toSql(subCtx), ', ')
+            ctx.formatter.join(this.ctes.entries(), ([, cte]) => cte.toSql(subCtx), ', ')
         }
 
         ctx.formatter
@@ -458,7 +408,18 @@ export class SelectStatement {
             .break()
             .startIndent()
 
-        this.fields.toSql(subCtx)
+        if (!this.fields.size) {
+            ctx.formatter.write('1')
+        } else {
+            ctx.formatter.join(this.fields.entries(), (field, index) => {
+                const [alias, node] = field
+                if (index > 0) {
+                    ctx.formatter.break()
+                }
+                node.toSql(ctx)
+                ctx.formatter.write(alias ? ` AS "${alias}"` : '')
+            }, ',')
+        }
 
         ctx.formatter.endIndent()
 
@@ -475,7 +436,9 @@ export class SelectStatement {
                 .endIndent()
         }
 
-        // todo join is only allowed when a main source was set
+        if (this.joins.length > 0 && !this.source) {
+            throw new Error('Joins without a source is not allowed')
+        }
 
         ctx.formatter.joinLines(this.joins, join => {
             join.toSql(subCtx)

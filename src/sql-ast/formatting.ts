@@ -29,13 +29,15 @@ export function createFormatter() {
             }
             return this
         },
-        join<T>(items: T[], fn: (item: T, index: number) => void, sep: string) {
-            items.forEach((item, index) => {
+        join<T>(items: Iterable<T>, fn: (item: T, index: number) => void, sep: string) {
+            let index = 0
+            for (let item of items) {
                 if (index > 0) {
                     this.write(sep)
                 }
                 fn(item, index)
-            })
+                index++
+            }
             return this
         },
         joinLines<T>(items: T[], fn: (item: T, index: number) => void) {
