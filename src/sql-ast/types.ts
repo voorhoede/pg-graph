@@ -1,4 +1,4 @@
-export type ValidComparisonSign = '=' | '!=' | '>' | '<' | '>=' | '<=' | 'IS' | 'IS NOT' | 'IN' | 'NOT IN'
+export type ValidComparisonSign = '=' | '!=' | '>' | '<' | '>=' | '<=' | 'IS' | 'IS NOT' | 'IN' | 'NOT IN' | 'LIKE'
 
 export enum OrderDirection {
     ASC = 'ASC',

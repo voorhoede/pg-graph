@@ -8,7 +8,7 @@ export type SqlNode =
     n.Compare |
     n.Cte |
     n.DerivedTable |
-    n.Field |
+    n.Column |
     n.FuncCall |
     n.Group |
     n.Identifier |

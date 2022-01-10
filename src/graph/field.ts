@@ -18,7 +18,7 @@ export function createField(name: string): Field {
             return this
         },
         [toSqlKey](statement, ctx) {
-            json.addField(statement, BuiltinGroups.Data, jsonProp, new n.Field(name, ctx.tableAlias))
+            json.addField(statement, BuiltinGroups.Data, jsonProp, new n.Column(name, ctx.tableAlias))
         }
     }
 }

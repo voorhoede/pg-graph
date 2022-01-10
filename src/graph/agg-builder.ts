@@ -62,7 +62,7 @@ export function createAggBuilder(ctx: GraphBuildContext): AggBuilderOutput {
                 addAvgCallField({
                     statement,
                     funcName: name,
-                    arg: new n.Field(options.column, tableContext),
+                    arg: new n.Column(options.column, tableContext),
                     alias: options.alias,
                     filter: options.filter,
                 })
@@ -78,7 +78,7 @@ export function createAggBuilder(ctx: GraphBuildContext): AggBuilderOutput {
                     addAvgCallField({
                         statement,
                         funcName: 'count',
-                        arg: options.column ? new n.Field(options.column, tableContext) : new n.All(tableContext),
+                        arg: options.column ? new n.Column(options.column, tableContext) : new n.All(tableContext),
                         alias: options.alias,
                     })
                 })

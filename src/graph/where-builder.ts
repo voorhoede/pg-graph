@@ -28,7 +28,7 @@ type Output = { builder: WhereBuilder, result: WhereBuilderResult };
  */
 export function createWhereBuilder(ctx: GraphBuildContext): Output {
 
-    const fields: n.Field[] = []
+    const fields: n.Column[] = []
 
     function createBuilderGroup(groupOp: LogicalOpType): Output {
         let resultNode: WhereBuilderResultNode = undefined
@@ -67,7 +67,7 @@ export function createWhereBuilder(ctx: GraphBuildContext): Output {
                 valueNode = createNodeForValue(value)
             }
 
-            const field = new n.Field(name)
+            const field = new n.Column(name)
             fields.push(field)
 
             const node = new n.Compare(field, comparison, valueNode)

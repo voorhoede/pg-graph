@@ -8,7 +8,7 @@ function formatCast(name?: string) {
 }
 
 export class Operator {
-    constructor(public left: FuncCall | AggCall | RawValue | Field | Subquery | Operator, public operator: string, public right: FuncCall | AggCall | RawValue | Field | Subquery | Operator) { }
+    constructor(public left: FuncCall | AggCall | RawValue | Column | Subquery | Operator, public operator: string, public right: FuncCall | AggCall | RawValue | Column | Subquery | Operator) { }
     public toSql(ctx: NodeToSqlContext) {
         this.left.toSql(ctx)
         ctx.formatter.write(' ' + this.operator + ' ')
@@ -222,9 +222,25 @@ export class OrderBy {
         this.columns = columns
     }
     toSql(ctx: NodeToSqlContext) {
+        const hasCommonDir =
+            this.columns.every(col => col.mode === OrderDirection.ASC) ||
+            this.columns.every(col => col.mode === OrderDirection.DESC)
+
         ctx.formatter
             .write('ORDER BY ')
             .join(this.columns, col => col.toSql(ctx), ', ')
+
+        if (hasCommonDir && this.columns.length && this.columns[0].mode !== 'ASC') {
+            ctx.formatter.write(' ' + this.columns[0].mode)
+        }
+    }
+}
+
+export class OrderByColumn {
+    constructor(public field: Column, public mode?: OrderDirection) { }
+    toSql(ctx: NodeToSqlContext) {
+        this.field.toSql(ctx)
+        ctx.formatter.write(this.mode ? ' ' + this.mode : '')
     }
 }
 
@@ -250,7 +266,7 @@ export class RawValue {
 export class TableRef {
     constructor(public name: string) { }
     field(fieldName: string, cast?: string) {
-        return new Field(fieldName, this.name, cast)
+        return new Column(fieldName, this.name, cast)
     }
     allFields() {
         return new All(this.name)
@@ -281,15 +297,15 @@ export class All {
     }
 }
 
-export class Field {
-    constructor(public field: string, public table?: string, public cast?: string) { }
+export class Column {
+    constructor(public name: string, public table?: string, public cast?: string) { }
     toSql(ctx: NodeToSqlContext) {
         const resolvedTable = this.table ?? ctx.table
         if (typeof resolvedTable === 'string') {
             new TableRef(resolvedTable).toSql(ctx)
-            ctx.formatter.write(`."${this.field}"${formatCast(this.cast)}`)
+            ctx.formatter.write(`."${this.name}"${formatCast(this.cast)}`)
         } else {
-            ctx.formatter.write(`"${this.field}"${formatCast(this.cast)}`)
+            ctx.formatter.write(`"${this.name}"${formatCast(this.cast)}`)
         }
     }
 }
@@ -326,14 +342,6 @@ export class DerivedTable {
     }
 }
 
-export class OrderByColumn {
-    constructor(public field: Field, public mode?: OrderDirection) { }
-    toSql(ctx: NodeToSqlContext) {
-        this.field.toSql(ctx)
-        ctx.formatter.write(this.mode ? ' ' + this.mode : '')
-    }
-}
-
 export class Placeholder {
     constructor(public id: number, public cast?: string) { }
     toSql(ctx: NodeToSqlContext) {
@@ -357,13 +365,13 @@ export class Join {
     }
 }
 
-export type SelectField = Field | Subquery | FuncCall | RawValue | Placeholder | Group
+export type SelectField = Column | Subquery | FuncCall | RawValue | Placeholder | Group
 
 export class SelectStatement {
     public fields = new Map<string, SelectField>()
     public ctes = new Map<string, Cte>()
     public joins: Join[] = [];
-    public groupBys: Field[] = [];
+    public groupBys: Column[] = [];
     public orderByColumns: OrderByColumn[] = []
     public source?: TableRefWithAlias | TableRef;
     private whereClauseChain?: WhereBuilderResultNode;

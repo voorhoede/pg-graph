@@ -55,7 +55,10 @@ type Through = {
 
 type Item = TabularSource | Field | Value | Where | OrderBy | Agg;
 
-export type NestedRelationType = 'many' | 'one';
+export enum NestedRelationType {
+    Many,
+    One,
+}
 
 function getTabularItemsCount(items: readonly Item[]): number {
     return items.reduce((acc, item) => item.type === GraphItemTypes.TABLE ? (acc + 1) : acc, 0)
@@ -115,7 +118,7 @@ export function createNestedTabularSource(options: TabularSourceOptions, relType
         subCtx.table = targetTable;
         subCtx.subRelationCount = subTabularSourceItems;
 
-        if (relType === 'many') {
+        if (relType === NestedRelationType.Many) {
 
             /*
                 Aggregrate before join for complex constructs where we are nested a couple of levels
@@ -132,25 +135,25 @@ export function createNestedTabularSource(options: TabularSourceOptions, relType
 
             json.convertDataFieldsToAgg(subStatement)
 
-            let foreignField: n.Field
+            let foreignField: n.Column
             if (through) {
                 // todo make this a loop
 
                 const joinAlias = ctx.genTableAlias()
 
-                foreignField = new n.Field('id', joinAlias)
+                foreignField = new n.Column('id', joinAlias)
 
                 subStatement.joins.push(new n.Join(
                     JoinType.INNER_JOIN,
                     new n.TableRefWithAlias(new n.TableRef(through.table), joinAlias),
                     new n.Compare(
-                        new n.Field(guessForeignKey(through.table), targetTableAlias),
+                        new n.Column(guessForeignKey(through.table), targetTableAlias),
                         '=',
-                        new n.Field('id', joinAlias),
+                        new n.Column('id', joinAlias),
                     )
                 ))
             } else {
-                foreignField = new n.Field(foreignKey ?? guessForeignKey(parentTable), targetTableAlias)
+                foreignField = new n.Column(foreignKey ?? guessForeignKey(parentTable), targetTableAlias)
             }
 
             subStatement.fields.set(json.createHiddenFieldName('group'), foreignField)
@@ -163,9 +166,9 @@ export function createNestedTabularSource(options: TabularSourceOptions, relType
                 JoinType.LEFT_JOIN,
                 derivedTable,
                 new n.Compare(
-                    new n.Field(json.createHiddenFieldName('group'), derivedAlias),
+                    new n.Column(json.createHiddenFieldName('group'), derivedAlias),
                     '=',
-                    new n.Field('id', parentTableAlias)
+                    new n.Column('id', parentTableAlias)
                 )
             ))
 
@@ -174,7 +177,7 @@ export function createNestedTabularSource(options: TabularSourceOptions, relType
                 dest: statement,
                 withPrefix: name,
             })
-        } else if (relType === 'one') {
+        } else if (relType === NestedRelationType.One) {
             /*
                 One to one relation
             */
@@ -192,9 +195,9 @@ export function createNestedTabularSource(options: TabularSourceOptions, relType
                     JoinType.LEFT_JOIN,
                     new n.TableRefWithAlias(new n.TableRef(through.table), joinAlias),
                     new n.Compare(
-                        new n.Field(through.foreignKey ?? guessForeignKey(through.table), parentTableAlias),
+                        new n.Column(through.foreignKey ?? guessForeignKey(through.table), parentTableAlias),
                         '=',
-                        new n.Field('id', joinAlias),
+                        new n.Column('id', joinAlias),
                     )
                 ))
 
@@ -202,9 +205,9 @@ export function createNestedTabularSource(options: TabularSourceOptions, relType
                     JoinType.INNER_JOIN,
                     new n.TableRefWithAlias(new n.TableRef(targetTable), targetTableAlias),
                     new n.Compare(
-                        new n.Field('id', targetTableAlias),
+                        new n.Column('id', targetTableAlias),
                         '=',
-                        new n.Field(foreignKey ?? guessForeignKey(targetTable), joinAlias)
+                        new n.Column(foreignKey ?? guessForeignKey(targetTable), joinAlias)
                     )
                 ))
             } else {
@@ -212,9 +215,9 @@ export function createNestedTabularSource(options: TabularSourceOptions, relType
                     JoinType.LEFT_JOIN,
                     new n.TableRefWithAlias(new n.TableRef(targetTable), targetTableAlias),
                     new n.Compare(
-                        new n.Field(foreignKey ?? guessForeignKey(parentTable), parentTableAlias),
+                        new n.Column(foreignKey ?? guessForeignKey(parentTable), parentTableAlias),
                         '=',
-                        new n.Field('id', targetTableAlias)
+                        new n.Column('id', targetTableAlias)
                     )
                 ))
             }
@@ -245,9 +248,9 @@ function createThroughChain({ ctx, initialThrough, items }: { ctx: GraphBuildCon
         many(name: string, foreignKeyOrFn: TabularSourceBuilder | string, builder?: TabularSourceBuilder): TabularSource {
             let item: TabularSource;
             if (typeof foreignKeyOrFn === 'function') {
-                item = createNestedTabularSource({ ctx, name, builder: foreignKeyOrFn }, 'many', undefined, throughs[0]);
+                item = createNestedTabularSource({ ctx, name, builder: foreignKeyOrFn }, NestedRelationType.Many, undefined, throughs[0]);
             } else {
-                item = createNestedTabularSource({ ctx, name, builder: builder! }, 'many', foreignKeyOrFn, throughs[0]);
+                item = createNestedTabularSource({ ctx, name, builder: builder! }, NestedRelationType.Many, foreignKeyOrFn, throughs[0]);
             }
             items.push(item)
             return item
@@ -255,9 +258,9 @@ function createThroughChain({ ctx, initialThrough, items }: { ctx: GraphBuildCon
         one(name: string, foreignKeyOrFn: TabularSourceBuilder | string, builder?: TabularSourceBuilder): TabularSource {
             let item: TabularSource;
             if (typeof foreignKeyOrFn === 'function') {
-                item = createNestedTabularSource({ ctx, name, builder: foreignKeyOrFn }, 'one', undefined, throughs[0]);
+                item = createNestedTabularSource({ ctx, name, builder: foreignKeyOrFn }, NestedRelationType.One, undefined, throughs[0]);
             } else {
-                item = createNestedTabularSource({ ctx, name, builder: builder! }, 'one', foreignKeyOrFn, throughs[0]);
+                item = createNestedTabularSource({ ctx, name, builder: builder! }, NestedRelationType.One, foreignKeyOrFn, throughs[0]);
             }
             items.push(item)
             return item
@@ -289,9 +292,9 @@ function createBaseTabularSource({ ctx, name, builder }: TabularSourceOptions, t
         many(name: string, foreignKeyOrFn: TabularSourceBuilder | string, builder?: TabularSourceBuilder): TabularSource {
             let item: TabularSource;
             if (typeof foreignKeyOrFn === 'function') {
-                item = createNestedTabularSource({ ctx, name, builder: foreignKeyOrFn }, 'many');
+                item = createNestedTabularSource({ ctx, name, builder: foreignKeyOrFn }, NestedRelationType.Many);
             } else {
-                item = createNestedTabularSource({ ctx, name, builder: builder! }, 'many', foreignKeyOrFn);
+                item = createNestedTabularSource({ ctx, name, builder: builder! }, NestedRelationType.Many, foreignKeyOrFn);
             }
             items.push(item)
             return item
@@ -299,9 +302,9 @@ function createBaseTabularSource({ ctx, name, builder }: TabularSourceOptions, t
         one(name: string, foreignKeyOrFn: TabularSourceBuilder | string, builder?: TabularSourceBuilder): TabularSource {
             let item: TabularSource;
             if (typeof foreignKeyOrFn === 'function') {
-                item = createNestedTabularSource({ ctx, name, builder: foreignKeyOrFn }, 'one');
+                item = createNestedTabularSource({ ctx, name, builder: foreignKeyOrFn }, NestedRelationType.One);
             } else {
-                item = createNestedTabularSource({ ctx, name, builder: builder! }, 'one', foreignKeyOrFn);
+                item = createNestedTabularSource({ ctx, name, builder: builder! }, NestedRelationType.One, foreignKeyOrFn);
             }
             items.push(item)
             return item

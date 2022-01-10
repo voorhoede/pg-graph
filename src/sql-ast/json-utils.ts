@@ -38,7 +38,7 @@ export function addField(statement: n.SelectStatement, group: string, jsonProp: 
     dataField.args.push(new n.RawValue(jsonProp), field)
 }
 
-export function convertDataFieldsToAgg(statement: n.SelectStatement, nullField?: n.Field) {
+export function convertDataFieldsToAgg(statement: n.SelectStatement, nullField?: n.Column) {
     let dataField = statement.fields.get(BuiltinGroups.Data)
     if (!dataField) {
         return
@@ -105,9 +105,9 @@ export function addReferencesToChildFields({ src, dest, withPrefix }: SpecialFie
     for (let [alias,] of fromSelect.fields) {
         if (alias && !isHiddenFieldName(alias)) {
             if (alias === BuiltinGroups.Data) {
-                addField(dest, BuiltinGroups.Data, withPrefix, new n.Field(alias, target))
+                addField(dest, BuiltinGroups.Data, withPrefix, new n.Column(alias, target))
             } else {
-                addField(dest, BuiltinGroups.Data, withPrefix + capitalizeFirst(alias), new n.Field(alias, target))
+                addField(dest, BuiltinGroups.Data, withPrefix + capitalizeFirst(alias), new n.Column(alias, target))
             }
         }
     }
