@@ -170,10 +170,20 @@ export class FuncCall {
     }
 }
 
+type AggCallOptions = {
+    orderBy?: OrderBy,
+    filter?: SqlNode,
+    distinct?: boolean
+}
+
 export class AggCall {
-    constructor(public name: string, public args: SqlNode[], public orderBy?: OrderBy, public filter?: SqlNode) { }
+    constructor(public name: string, public args: SqlNode[], public additionalOptions: AggCallOptions = {}) { }
     toSql(ctx: NodeToSqlContext) {
         ctx.formatter.write(`${this.name}(`)
+
+        if (this.additionalOptions.distinct) {
+            ctx.formatter.write('DISTINCT ')
+        }
 
         const containsFuncCalls = this.args.some(arg => (arg instanceof FuncCall || arg instanceof AggCall))
 
@@ -191,11 +201,11 @@ export class AggCall {
             ctx.formatter.join(this.args, arg => arg.toSql(ctx), ', ')
         }
 
-        if (this.orderBy) {
+        if (this.additionalOptions.orderBy) {
             ctx.formatter
                 .break()
                 .startIndent()
-            this.orderBy.toSql(ctx)
+            this.additionalOptions.orderBy.toSql(ctx)
             ctx.formatter
                 .endIndent()
                 .break()
@@ -203,11 +213,11 @@ export class AggCall {
 
         ctx.formatter.write(`)`)
 
-        if (this.filter) {
+        if (this.additionalOptions.filter) {
             ctx.formatter
                 .write(' FILTER (')
                 .startIndent()
-            new Where(this.filter).toSql(ctx)
+            new Where(this.additionalOptions.filter).toSql(ctx)
             ctx.formatter
                 .endIndent()
                 .break()

@@ -21,8 +21,9 @@ type AggBuilderOutput = { builder: AggBuilder, result: AggBuilderResult };
 type AggItem = (statement: n.SelectStatement) => void;
 
 export type AggOptions = {
-    alias?: string,
     column: string,
+    alias?: string,
+    distinct?: boolean,
     filter?: (builderHandler: WhereBuilder) => void,
 }
 
@@ -37,10 +38,11 @@ export function createAggBuilder(ctx: GraphBuildContext): AggBuilderOutput {
         funcName: string,
         arg: SqlNode,
         alias?: string,
+        distinct?: boolean,
         filter?: (builderHandler: WhereBuilder) => void
     }
 
-    function addAvgCallField({ statement, funcName, arg, alias, filter }: AvgCallFieldOptions) {
+    function addAvgCallField({ statement, funcName, arg, alias, distinct, filter }: AvgCallFieldOptions) {
         const { builder, result } = createWhereBuilder(ctx)
 
         if (filter) {
@@ -52,7 +54,10 @@ export function createAggBuilder(ctx: GraphBuildContext): AggBuilderOutput {
             statement,
             BuiltinGroups.Agg,
             alias ?? funcName,
-            new n.AggCall(funcName, [arg], undefined, result.node)
+            new n.AggCall(funcName, [arg], {
+                filter: result.node,
+                distinct,
+            })
         )
     }
 
@@ -65,6 +70,7 @@ export function createAggBuilder(ctx: GraphBuildContext): AggBuilderOutput {
                     arg: new n.Column(options.column, tableContext),
                     alias: options.alias,
                     filter: options.filter,
+                    distinct: options.distinct,
                 })
             })
             return this
@@ -80,6 +86,7 @@ export function createAggBuilder(ctx: GraphBuildContext): AggBuilderOutput {
                         funcName: 'count',
                         arg: options.column ? new n.Column(options.column, tableContext) : new n.All(tableContext),
                         alias: options.alias,
+                        distinct: options.distinct,
                     })
                 })
                 return this

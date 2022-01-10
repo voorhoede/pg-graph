@@ -56,7 +56,9 @@ export function convertDataFieldsToAgg(statement: n.SelectStatement, nullField?:
 
     const call = new n.AggCall('jsonb_agg', [
         dataField
-    ], orderBy)
+    ], {
+        orderBy,
+    })
 
     let field: SelectField;
     if (nullField) {
