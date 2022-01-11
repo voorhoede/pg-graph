@@ -74,7 +74,9 @@ export function createWhereBuilder(ctx: GraphBuildContext): Output {
             if (!resultNode) {
                 resultNode = node
             } else {
-                resultNode = op === 'and' ? new n.And(resultNode, node) : new n.Or(resultNode, node)
+                resultNode = op === 'and'
+                    ? new n.And(resultNode, node)
+                    : new n.Or(resultNode, node)
             }
         }
 
@@ -85,7 +87,9 @@ export function createWhereBuilder(ctx: GraphBuildContext): Output {
                 if (!resultNode) {
                     resultNode = new n.Group(result.node)
                 } else {
-                    resultNode = op === 'and' ? new n.And(resultNode, new n.Group(result.node)) : new n.Or(resultNode, new n.Group(result.node))
+                    resultNode = op === 'and'
+                        ? new n.And(resultNode, new n.Group(result.node))
+                        : new n.Or(resultNode, new n.Group(result.node))
                 }
             }
         }

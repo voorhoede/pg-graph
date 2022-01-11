@@ -26,6 +26,23 @@ export class WindowFilter {
     }
 }
 
+export class WindowFunc {
+    constructor(public node: FuncCall | AggCall, public partitionBy?: Column, public orderBy?: OrderBy) { }
+    public toSql(ctx: NodeToSqlContext) {
+        this.node.toSql(ctx)
+        ctx.formatter.write(' OVER (')
+        if (this.partitionBy) {
+            ctx.formatter.write(' PARTITION BY ')
+            this.partitionBy.toSql(ctx)
+            ctx.formatter.write(' ')
+        }
+        if (this.orderBy) {
+            this.orderBy.toSql(ctx)
+        }
+        ctx.formatter.write(')')
+    }
+}
+
 export class Cte {
     constructor(public name: string, public node: SelectStatement) { }
     toSql(ctx: NodeToSqlContext) {
@@ -375,7 +392,7 @@ export class Join {
     }
 }
 
-export type SelectField = Column | Subquery | FuncCall | RawValue | Placeholder | Group
+export type SelectField = Column | Subquery | FuncCall | AggCall | WindowFunc | RawValue | Placeholder | Group | Operator
 
 export class SelectStatement {
     public fields = new Map<string, SelectField>()
@@ -385,6 +402,8 @@ export class SelectStatement {
     public orderByColumns: OrderByColumn[] = []
     public source?: TableRefWithAlias | TableRef;
     private whereClauseChain?: WhereBuilderResultNode;
+    public limit?: number;
+    public offset?: number;
 
     hasWhereClause() {
         return !!this.whereClauseChain
@@ -411,7 +430,7 @@ export class SelectStatement {
     }
     toSql(ctx: NodeToSqlContext) {
         const subCtx: NodeToSqlContext = {
-            table: this.source instanceof TableRef ? this.source.name : this.source?.ref.name,
+            table: this.source instanceof TableRefWithAlias ? this.source?.alias : this.source?.name,
             formatter: ctx.formatter,
         };
 
@@ -434,7 +453,7 @@ export class SelectStatement {
                 if (index > 0) {
                     ctx.formatter.break()
                 }
-                node.toSql(ctx)
+                node.toSql(subCtx)
                 ctx.formatter.write(alias ? ` AS "${alias}"` : '')
             }, ',')
         }
@@ -468,11 +487,27 @@ export class SelectStatement {
 
         if (this.groupBys.length) {
             ctx.formatter.writeLine('GROUP BY ')
-            ctx.formatter.join(this.groupBys, groupByCol => groupByCol.toSql(ctx), ', ')
+            ctx.formatter.join(this.groupBys, groupByCol => groupByCol.toSql(subCtx), ', ')
         }
 
         if (this.orderByColumns.length) {
             new OrderBy(...this.orderByColumns).toSql(subCtx)
+        }
+
+        if (this.limit) {
+            ctx.formatter.writeLine('LIMIT')
+            ctx.formatter.startIndent()
+            ctx.formatter.break()
+            ctx.formatter.write(this.limit.toString())
+            ctx.formatter.endIndent()
+        }
+
+        if (this.offset) {
+            ctx.formatter.writeLine('OFFSET')
+            ctx.formatter.startIndent()
+            ctx.formatter.break()
+            ctx.formatter.write(this.offset.toString())
+            ctx.formatter.endIndent()
         }
 
         ctx.formatter.endIndent()

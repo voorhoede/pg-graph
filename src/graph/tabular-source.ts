@@ -3,29 +3,35 @@ import { createWhereBuilder, WhereBuilder } from "./where-builder"
 import { createAggBuilder, AggBuilder } from "./agg-builder"
 import { GraphItemTypes, ToSql, toSqlKey } from "./types"
 
-import { createWhereClause, Where } from "./where-clause"
+import { createWhereClause } from "./where-clause"
 import { createField, Field } from "./field"
 import { createValue, Value } from "./value"
-import { createOrderBy, OrderBy } from "./order-by"
-import { createAgg, Agg } from './agg'
+import { createOrderBy } from "./order-by"
+import { createAgg } from './agg'
+import { createLimit } from './limit'
 
 import { n, ValidComparisonSign, JoinType, json } from "../sql-ast";
 import { OrderDirection } from "../sql-ast/types"
 
-export type TabularSourceBuilder = (s: TabularSource) => void
+import * as plugins from '../plugins'
 
-export type TabularSource = {
+export type TabularSourceBuilder = (source: TabularSource & TabularSourcePlugins) => void
+
+export interface TabularSource extends TabularChain, ToSql {
     type: GraphItemTypes.TABLE,
     agg(builderHandler: (builder: AggBuilder) => void): TabularSource,
+    limit(count: number): TabularSource,
     alias(name: string): TabularSource,
     where(name: string, sign: ValidComparisonSign, value: any): TabularSource,
     where(fn: (builder: WhereBuilder) => void): TabularSource,
     field(name: string): Field,
     value(jsonProp: string, value: any): Value,
     orderBy(name: string, mode?: OrderDirection): TabularSource
-} & TabularChain & ToSql
+}
 
-type TabularChain = {
+export interface TabularSourcePlugins { }
+
+export interface TabularChain {
     many(tableOrView: string, foreignKey: string, builder: TabularSourceBuilder): TabularSource,
     many(tableOrView: string, builder: TabularSourceBuilder): TabularSource,
     one(tableOrView: string, foreignKey: string, builder: TabularSourceBuilder): TabularSource,
@@ -53,15 +59,11 @@ type Through = {
     foreignKey?: string
 }
 
-type Item = TabularSource | Field | Value | Where | OrderBy | Agg;
+export type Item = { type: string } & ToSql
 
 export enum NestedRelationType {
     Many,
     One,
-}
-
-function getTabularItemsCount(items: readonly Item[]): number {
-    return items.reduce((acc, item) => item.type === GraphItemTypes.TABLE ? (acc + 1) : acc, 0)
 }
 
 export function createRootTabularSource(options: TabularSourceOptions) {
@@ -87,7 +89,6 @@ export function createRootTabularSource(options: TabularSourceOptions) {
             return
         }
 
-        // todo check if the cte already exists?
         const cte = new n.Cte(`${name}Cte`, cteSelect)
         statement.ctes.set(cte.name, cte)
 
@@ -210,6 +211,8 @@ export function createNestedTabularSource(options: TabularSourceOptions, relType
                         new n.Column(foreignKey ?? guessForeignKey(targetTable), joinAlias)
                     )
                 ))
+
+
             } else {
                 statement.joins.push(new n.Join(
                     JoinType.LEFT_JOIN,
@@ -273,12 +276,18 @@ function createBaseTabularSource({ ctx, name, builder }: TabularSourceOptions, t
 
     let alias: string
 
+    const addItem = (item: Item) => items.push(item)
+
     const instance: TabularSource = {
         type: GraphItemTypes.TABLE,
+        limit(count: number) {
+            addItem(createLimit(count))
+            return this
+        },
         agg(builderHandler: (builder: AggBuilder) => void) {
             const { builder, result } = createAggBuilder(ctx)
             builderHandler(builder)
-            items.push(createAgg(result))
+            addItem(createAgg(result))
             return this
         },
         through(table: string, foreignKey?: string) {
@@ -286,7 +295,6 @@ function createBaseTabularSource({ ctx, name, builder }: TabularSourceOptions, t
                 table,
                 foreignKey,
             }
-
             return createThroughChain({ ctx, initialThrough, items })
         },
         many(name: string, foreignKeyOrFn: TabularSourceBuilder | string, builder?: TabularSourceBuilder): TabularSource {
@@ -296,7 +304,7 @@ function createBaseTabularSource({ ctx, name, builder }: TabularSourceOptions, t
             } else {
                 item = createNestedTabularSource({ ctx, name, builder: builder! }, NestedRelationType.Many, foreignKeyOrFn);
             }
-            items.push(item)
+            addItem(item)
             return item
         },
         one(name: string, foreignKeyOrFn: TabularSourceBuilder | string, builder?: TabularSourceBuilder): TabularSource {
@@ -306,7 +314,7 @@ function createBaseTabularSource({ ctx, name, builder }: TabularSourceOptions, t
             } else {
                 item = createNestedTabularSource({ ctx, name, builder: builder! }, NestedRelationType.One, foreignKeyOrFn);
             }
-            items.push(item)
+            addItem(item)
             return item
         },
         where(nameOrBuilderHandler: ((builder: WhereBuilder) => void) | string, sign?: ValidComparisonSign, value?: any) {
@@ -316,7 +324,7 @@ function createBaseTabularSource({ ctx, name, builder }: TabularSourceOptions, t
             } else {
                 builder(nameOrBuilderHandler, sign!, value)
             }
-            items.push(createWhereClause(result))
+            addItem(createWhereClause(result))
             return this
         },
         alias(name) {
@@ -325,19 +333,25 @@ function createBaseTabularSource({ ctx, name, builder }: TabularSourceOptions, t
         },
         field(name) {
             const fieldItem = createField(name)
-            items.push(fieldItem)
+            addItem(fieldItem)
             return fieldItem
         },
         value(jsonProp, value) {
             const valueItem = createValue(jsonProp, value, ctx);
-            items.push(valueItem)
+            addItem(valueItem)
             return valueItem
         },
         orderBy(name, mode) {
             const orderBy = createOrderBy(name, mode)
-            items.push(orderBy)
+            addItem(orderBy)
             return this
         },
+
+        ...plugins.mountPluginFor(plugins.PluginType.TabularSource, {
+            addItem,
+            buildContext: ctx,
+        }),
+
         [toSqlKey](statement, ctx) {
             toSql({
                 ctx,
@@ -349,9 +363,13 @@ function createBaseTabularSource({ ctx, name, builder }: TabularSourceOptions, t
         }
     }
 
-    builder?.(instance)
+    builder?.(instance as any)
 
     return instance
+}
+
+function getTabularItemsCount(items: readonly Item[]): number {
+    return items.reduce((acc, item) => item.type === GraphItemTypes.TABLE ? (acc + 1) : acc, 0)
 }
 
 function guessForeignKey(tableName: string) {

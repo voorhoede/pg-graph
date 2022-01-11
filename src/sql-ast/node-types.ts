@@ -26,7 +26,8 @@ export type SqlNode =
     n.Where |
     n.WindowFilter |
     n.Join |
-    n.Operator
+    n.Operator |
+    n.WindowFunc
 
 export function isSqlNode(n: any): n is SqlNode {
     return n.type && n.toSql

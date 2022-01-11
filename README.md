@@ -56,32 +56,6 @@ Note that your data is ready to be returned from you api. No need to loop throug
 
 ## Ideas
 
-### Aggregrations like count, avg, sum
-
-"As a user I want to retrieve the amount of comments in a blog"
-
-```
-const query = graphQuery()
-
-query.source('blog', blog => {
-    blog.many('comment', comments => {
-        // will be added as a agg in blog
-        // blog: { agg: { count: 30 } }
-        comments.count()
-
-        // maybe the amount of comments grouped by user?
-        comments.count().groupBy('posted_by')
-
-        // or maybe something like this to make it clearer that the data points are aggregrated
-        comments.agg(agg => {
-            agg.count()
-
-            agg.countWhere()
-        })
-    })
-})
-```
-
 ## Pagination
 
 "As a user I want efficient pagination"
@@ -89,8 +63,11 @@ query.source('blog', blog => {
 Offer a solution for limit/offset and keyset pagination as separate modules
 
 ```
+import { graphQuery, installPlugin } from 'pg-graph
+
+installPlugin(pagination())
+
 const query = graphQuery()
-    .withPlugin(offsetPagination())
 
 query.source('blog', blog => {
     blog.many('comment', comments => {
