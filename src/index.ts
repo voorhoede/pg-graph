@@ -13,10 +13,7 @@ query.source('user', user => {
     //     })
 
     user
-        .throughMany('domains') // point to comment
-        .throughMany('sites') // blog_id?
-        .throughMany('blogs') // point to comment
-        .one('comment', q => {
+        .many('comment', q => {
             q.field('message')
         })
 
