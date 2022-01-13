@@ -17,7 +17,7 @@ test('should be able to get all comments belonging to the blogs of user "Remco"'
         user.field('name')
 
         user
-            .through('blog')
+            .through('blog', 'posted_by')
             .many('comment', q => {
                 q.field('message')
             })
@@ -35,6 +35,50 @@ test('should be able to get all comments belonging to the blogs of user "Remco"'
                     { message: 'Amazing blog!' },
                     { message: 'I agree with this blog' }
                 ]
+            },
+        ]
+    })
+
+    await client.end()
+
+    t.end()
+})
+
+test.only('should be able to get the blog belonging to the comments posted by user "Remco"', async (t) => {
+    const client = await connect()
+
+    const query = graphQuery()
+
+    query.source('user', user => {
+        user.field('name')
+
+        user
+            .through('comment', 'posted_by')
+            .one('blog', q => {
+                q.field('name')
+            })
+
+        user.where('name', '=', 'Remco')
+    })
+
+    const row = await client.query(query.toSql(), query.values()).then(result => result.rows[0])
+
+    /*
+        Does not really make sense in relation to the data because both comments have the blog
+    */
+    t.deepEqual(row.data, {
+        user: [ 
+            {
+                name: 'Remco',
+                blog: {
+                    name: 'Blog about cats'
+                }
+            },
+            {
+                name: 'Remco',
+                blog: {
+                    name: 'Blog about cats'
+                }
             },
         ]
     })

@@ -384,6 +384,7 @@ export class SelectStatement {
     public groupBys: Column[] = [];
     public orderByColumns: OrderByColumn[] = []
     public source?: TableRefWithAlias | TableRef;
+    public limit?: number;
     private whereClauseChain?: WhereBuilderResultNode;
 
     hasWhereClause() {
@@ -398,6 +399,9 @@ export class SelectStatement {
     }
     copyGroupBysTo(other: SelectStatement) {
         other.groupBys = other.groupBys.concat(this.groupBys)
+    }
+    copyJoinsTo(other: SelectStatement) {
+        other.joins = other.joins.concat(this.joins)
     }
     copyWhereClauseTo(other: SelectStatement) {
         if (this.whereClauseChain) {
@@ -473,6 +477,11 @@ export class SelectStatement {
 
         if (this.orderByColumns.length) {
             new OrderBy(...this.orderByColumns).toSql(subCtx)
+        }
+
+        if (this.limit) {
+            ctx.formatter.writeLine('LIMIT ')
+            ctx.formatter.write(this.limit.toString())
         }
 
         ctx.formatter.endIndent()
