@@ -32,7 +32,7 @@ export type GraphToSqlContext = {
     subRelationCount?: number,
     depth: number,
     createSubContext(): GraphToSqlContext,
-    genTableAlias(): string,
+    genTableAlias(prefix?: string): string,
 }
 
 export function createGraphToSqlContext(): GraphToSqlContext {
@@ -40,8 +40,8 @@ export function createGraphToSqlContext(): GraphToSqlContext {
 
     const proto: GraphToSqlContext = {
         depth: 0,
-        genTableAlias() {
-            return aliasCreator.next()
+        genTableAlias(prefix?: string) {
+            return (prefix ? prefix + '_' : '') + aliasCreator.next()
         },
         createSubContext() {
             const subContext: GraphToSqlContext = Object.create(proto)

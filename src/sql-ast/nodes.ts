@@ -401,9 +401,9 @@ export class SelectStatement {
     public groupBys: Column[] = [];
     public orderByColumns: OrderByColumn[] = []
     public source?: TableRefWithAlias | TableRef;
-    private whereClauseChain?: WhereBuilderResultNode;
     public limit?: number;
     public offset?: number;
+    private whereClauseChain?: WhereBuilderResultNode;
 
     hasWhereClause() {
         return !!this.whereClauseChain
@@ -417,6 +417,9 @@ export class SelectStatement {
     }
     copyGroupBysTo(other: SelectStatement) {
         other.groupBys = other.groupBys.concat(this.groupBys)
+    }
+    copyJoinsTo(other: SelectStatement) {
+        other.joins = other.joins.concat(this.joins)
     }
     copyWhereClauseTo(other: SelectStatement) {
         if (this.whereClauseChain) {

@@ -14,6 +14,7 @@ import { n, ValidComparisonSign, JoinType, json } from "../sql-ast";
 import { OrderDirection } from "../sql-ast/types"
 
 import * as plugins from '../plugins'
+import * as joinHelpers from './helpers'
 
 export type TabularSourceBuilder = (source: TabularSource & TabularSourcePlugins) => void
 
@@ -36,7 +37,8 @@ export interface TabularChain {
     many(tableOrView: string, builder: TabularSourceBuilder): TabularSource,
     one(tableOrView: string, foreignKey: string, builder: TabularSourceBuilder): TabularSource,
     one(tableOrView: string, builder: TabularSourceBuilder): TabularSource,
-    through(table: string, foreignKey?: string): TabularChain
+    throughMany(table: string, foreignKey?: string): TabularChain
+    throughOne(table: string, foreignKey?: string): TabularChain
 }
 
 type TabularSourceOptions = {
@@ -56,7 +58,8 @@ type TabularSourceToSqlOptions = {
 
 type Through = {
     table: string,
-    foreignKey?: string
+    foreignKey?: string,
+    rel: NestedRelationType,
 }
 
 export type Item = { type: string } & ToSql
@@ -68,7 +71,7 @@ export enum NestedRelationType {
 
 export function createRootTabularSource(options: TabularSourceOptions) {
     return createBaseTabularSource(options, ({ targetTable, statement, ctx, items, name }) => {
-        const alias = ctx.genTableAlias()
+        const alias = ctx.genTableAlias(targetTable)
 
         const subCtx = ctx.createSubContext()
         subCtx.table = targetTable
@@ -106,11 +109,11 @@ export function createRootTabularSource(options: TabularSourceOptions) {
     })
 }
 
-export function createNestedTabularSource(options: TabularSourceOptions, relType: NestedRelationType, foreignKey?: string, through?: Through) {
+export function createNestedTabularSource(options: TabularSourceOptions, relType: NestedRelationType, foreignKey?: string, through?: Through[]) {
     return createBaseTabularSource(options, ({ targetTable, statement, ctx, items, name }) => {
         const parentTableAlias = ctx.tableAlias!
         const parentTable = ctx.table!
-        const targetTableAlias = ctx.genTableAlias()
+        const targetTableAlias = ctx.genTableAlias(targetTable)
 
         const subTabularSourceItems = getTabularItemsCount(items)
 
@@ -136,31 +139,23 @@ export function createNestedTabularSource(options: TabularSourceOptions, relType
 
             json.convertDataFieldsToAgg(subStatement)
 
-            let foreignField: n.Column
-            if (through) {
-                // todo make this a loop
+            let groupByField = joinHelpers.getOneHasOneColumnRef(subStatement.source, new n.TableRef(parentTable), foreignKey)
 
-                const joinAlias = ctx.genTableAlias()
+            if (through?.length) {
+                const [lastThroughTableRef, lastThroughItem] = applyThroughItemsToStatement(
+                    ctx,
+                    subStatement,
+                    [...through].reverse(),
+                    subStatement.source
+                )
 
-                foreignField = new n.Column('id', joinAlias)
-
-                subStatement.joins.push(new n.Join(
-                    JoinType.INNER_JOIN,
-                    new n.TableRefWithAlias(new n.TableRef(through.table), joinAlias),
-                    new n.Compare(
-                        new n.Column(guessForeignKey(through.table), targetTableAlias),
-                        '=',
-                        new n.Column('id', joinAlias),
-                    )
-                ))
-            } else {
-                foreignField = new n.Column(foreignKey ?? guessForeignKey(parentTable), targetTableAlias)
+                groupByField = joinHelpers.getOneHasOneColumnRef(lastThroughTableRef!, new n.TableRef(parentTable), lastThroughItem!.foreignKey)
             }
 
-            subStatement.fields.set(json.createHiddenFieldName('group'), foreignField)
-            subStatement.groupBys.push(foreignField)
+            subStatement.fields.set(json.createHiddenFieldName('group'), groupByField)
+            subStatement.groupBys.push(groupByField)
 
-            const derivedAlias = ctx.genTableAlias();
+            const derivedAlias = ctx.genTableAlias(targetTable);
             const derivedTable = new n.DerivedTable(subStatement, derivedAlias)
 
             statement.joins.push(new n.Join(
@@ -187,73 +182,142 @@ export function createNestedTabularSource(options: TabularSourceOptions, relType
 
             itemsToSql(items, subStatement, subCtx)
 
-            if (through) {
-                const joinAlias = ctx.genTableAlias()
+            if (through?.length) {
+                const [source, ...remainingThroughItems] = through;
 
-                // todo make this a loop
-
-                statement.joins.push(new n.Join(
-                    JoinType.LEFT_JOIN,
-                    new n.TableRefWithAlias(new n.TableRef(through.table), joinAlias),
-                    new n.Compare(
-                        new n.Column(through.foreignKey ?? guessForeignKey(through.table), parentTableAlias),
-                        '=',
-                        new n.Column('id', joinAlias),
+                const sourceTableAlias = ctx.genTableAlias(source.table)
+                subStatement.source = new n.TableRefWithAlias(new n.TableRef(source.table), sourceTableAlias)
+                subStatement.addWhereClause(
+                    joinHelpers.createComparison(
+                        source.rel,
+                        subStatement.source,
+                        new n.TableRefWithAlias(new n.TableRef(parentTable), parentTableAlias),
+                        source.foreignKey
                     )
-                ))
+                )
+                subStatement.limit = 1
 
-                statement.joins.push(new n.Join(
+                const [lastThroughTableRef,] = applyThroughItemsToStatement(
+                    ctx,
+                    subStatement,
+                    remainingThroughItems,
+                    subStatement.source
+                )
+
+                subStatement.joins.push(new n.Join(
                     JoinType.INNER_JOIN,
                     new n.TableRefWithAlias(new n.TableRef(targetTable), targetTableAlias),
-                    new n.Compare(
-                        new n.Column('id', targetTableAlias),
-                        '=',
-                        new n.Column(foreignKey ?? guessForeignKey(targetTable), joinAlias)
+                    joinHelpers.createComparison(
+                        NestedRelationType.One,
+                        new n.TableRefWithAlias(new n.TableRef(targetTable), targetTableAlias),
+                        lastThroughTableRef ?? subStatement.source,
+                        foreignKey,
                     )
                 ))
 
+                const lateralAlias = subCtx.genTableAlias(targetTable)
+
+                statement.joins.push(new n.Join(
+                    JoinType.LEFT_JOIN_LATERAL,
+                    new n.DerivedTable(subStatement, lateralAlias),
+                    n.Identifier.true,
+                ))
+
+                json.addField(statement, 'data', name, new n.Column('data', lateralAlias))
 
             } else {
+                console.log(targetTable, parentTable)
+
                 statement.joins.push(new n.Join(
                     JoinType.LEFT_JOIN,
                     new n.TableRefWithAlias(new n.TableRef(targetTable), targetTableAlias),
-                    new n.Compare(
-                        new n.Column(foreignKey ?? guessForeignKey(parentTable), parentTableAlias),
-                        '=',
-                        new n.Column('id', targetTableAlias)
+                    joinHelpers.createComparison(
+                        NestedRelationType.One,
+                        new n.TableRefWithAlias(new n.TableRef(targetTable), targetTableAlias), // comment.id
+                        new n.TableRefWithAlias(new n.TableRef(parentTable), parentTableAlias), // user.comment_id
+                        foreignKey,
                     )
                 ))
+
+                subStatement.copyWhereClauseTo(statement)
+
+                json.copyFieldsInto(subStatement, statement, 'data', name)
             }
-
-            json.copyFieldsInto(subStatement, statement, 'data', name)
-
-            subStatement.copyWhereClauseTo(statement)
 
         } else {
             (relType as never)
         }
 
-
     })
+}
+
+function applyThroughItemsToStatement(ctx: GraphToSqlContext, statement: n.SelectStatement, items: Through[], targetTableRef: n.TableRefWithAlias): [n.TableRefWithAlias | undefined, Through | undefined] {
+    let prevThroughItem: Through | undefined;
+    let prevThroughTableRef: n.TableRefWithAlias | undefined;
+
+    for (let throughItem of items) {
+        const throughTableAlias = ctx.genTableAlias(throughItem.table)
+        const throughTableRef = new n.TableRefWithAlias(new n.TableRef(throughItem.table), throughTableAlias)
+
+        if (throughItem.rel === NestedRelationType.One) {
+            statement.joins.push(new n.Join(
+                JoinType.INNER_JOIN,
+                throughTableRef,
+                joinHelpers.createComparison(
+                    throughItem.rel,
+                    throughTableRef,
+                    prevThroughTableRef ?? targetTableRef,
+                    throughItem.foreignKey,
+                )
+            ))
+        } else if (throughItem.rel === NestedRelationType.Many) {
+            statement.joins.push(new n.Join(
+                JoinType.INNER_JOIN,
+                throughTableRef,
+                joinHelpers.createComparison(
+                    throughItem.rel,
+                    throughTableRef,
+                    prevThroughTableRef ?? targetTableRef,
+                    prevThroughItem ? prevThroughItem.foreignKey : throughItem.foreignKey,
+                )
+            ))
+        } else {
+            (throughItem.rel as never)
+        }
+
+        prevThroughTableRef = throughTableRef
+        prevThroughItem = throughItem
+    }
+
+    return [prevThroughTableRef, prevThroughItem]
 }
 
 function createThroughChain({ ctx, initialThrough, items }: { ctx: GraphBuildContext, initialThrough: Through, items: Item[] }): TabularChain {
     const throughs: Through[] = [initialThrough]
 
     return {
-        through(table: string, foreignKey?: string) {
+        throughMany(table: string, foreignKey?: string) {
             throughs.push({
                 table,
                 foreignKey,
+                rel: NestedRelationType.Many,
+            })
+            return this
+        },
+        throughOne(table: string, foreignKey?: string) {
+            throughs.push({
+                table,
+                foreignKey,
+                rel: NestedRelationType.One,
             })
             return this
         },
         many(name: string, foreignKeyOrFn: TabularSourceBuilder | string, builder?: TabularSourceBuilder): TabularSource {
             let item: TabularSource;
             if (typeof foreignKeyOrFn === 'function') {
-                item = createNestedTabularSource({ ctx, name, builder: foreignKeyOrFn }, NestedRelationType.Many, undefined, throughs[0]);
+                item = createNestedTabularSource({ ctx, name, builder: foreignKeyOrFn }, NestedRelationType.Many, undefined, throughs);
             } else {
-                item = createNestedTabularSource({ ctx, name, builder: builder! }, NestedRelationType.Many, foreignKeyOrFn, throughs[0]);
+                item = createNestedTabularSource({ ctx, name, builder: builder! }, NestedRelationType.Many, foreignKeyOrFn, throughs);
             }
             items.push(item)
             return item
@@ -261,9 +325,9 @@ function createThroughChain({ ctx, initialThrough, items }: { ctx: GraphBuildCon
         one(name: string, foreignKeyOrFn: TabularSourceBuilder | string, builder?: TabularSourceBuilder): TabularSource {
             let item: TabularSource;
             if (typeof foreignKeyOrFn === 'function') {
-                item = createNestedTabularSource({ ctx, name, builder: foreignKeyOrFn }, NestedRelationType.One, undefined, throughs[0]);
+                item = createNestedTabularSource({ ctx, name, builder: foreignKeyOrFn }, NestedRelationType.One, undefined, throughs);
             } else {
-                item = createNestedTabularSource({ ctx, name, builder: builder! }, NestedRelationType.One, foreignKeyOrFn, throughs[0]);
+                item = createNestedTabularSource({ ctx, name, builder: builder! }, NestedRelationType.One, foreignKeyOrFn, throughs);
             }
             items.push(item)
             return item
@@ -290,10 +354,20 @@ function createBaseTabularSource({ ctx, name, builder }: TabularSourceOptions, t
             addItem(createAgg(result))
             return this
         },
-        through(table: string, foreignKey?: string) {
+        throughMany(table: string, foreignKey?: string) {
             const initialThrough: Through = {
                 table,
                 foreignKey,
+                rel: NestedRelationType.Many,
+            }
+
+            return createThroughChain({ ctx, initialThrough, items })
+        },
+        throughOne(table: string, foreignKey?: string) {
+            const initialThrough: Through = {
+                table,
+                foreignKey,
+                rel: NestedRelationType.One,
             }
             return createThroughChain({ ctx, initialThrough, items })
         },
@@ -370,10 +444,6 @@ function createBaseTabularSource({ ctx, name, builder }: TabularSourceOptions, t
 
 function getTabularItemsCount(items: readonly Item[]): number {
     return items.reduce((acc, item) => item.type === GraphItemTypes.TABLE ? (acc + 1) : acc, 0)
-}
-
-function guessForeignKey(tableName: string) {
-    return `${tableName.toLowerCase()}_id`
 }
 
 function itemsToSql(items: readonly Item[], statement: n.SelectStatement, ctx: GraphToSqlContext) {
