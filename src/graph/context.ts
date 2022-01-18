@@ -1,7 +1,7 @@
 import { n } from "../sql-ast";
 
 export type GraphBuildContext = {
-    createPlaceholderForValue(value: any): n.Placeholder
+    createPlaceholderForValue(value: any): n.Cast | n.Placeholder
     get values(): readonly any[]
 }
 
@@ -9,7 +9,7 @@ export function createGraphBuildContext(): GraphBuildContext {
     let placeholderValues: any[] = [];
 
     return {
-        createPlaceholderForValue(value: any): n.Placeholder {
+        createPlaceholderForValue(value: any): n.Cast | n.Placeholder {
             let i = placeholderValues.indexOf(value)
             if (i > -1) {
                 i += 1
@@ -18,7 +18,9 @@ export function createGraphBuildContext(): GraphBuildContext {
                 i = placeholderValues.length
             }
 
-            return new n.Placeholder(i, jsTypeToPgType(value))
+            const type = jsTypeToPgType(value)
+
+            return type ? new n.Cast(new n.Placeholder(i), type) : new n.Placeholder(i)
         },
         get values() {
             return placeholderValues

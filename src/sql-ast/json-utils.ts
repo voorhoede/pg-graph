@@ -14,7 +14,7 @@ export function createHiddenFieldName(fieldName: string) {
 
 export function convertToEmptyDataStatement(statement: n.SelectStatement) {
     statement.fields.clear()
-    statement.fields.set('data', new n.RawValue('[]', 'json'))
+    statement.fields.set('data', new n.Cast(new n.RawValue('[]'), 'json'))
     statement.orderByColumns.length = 0
     statement.groupBys.length = 0
     statement.source = undefined
@@ -48,6 +48,31 @@ export function convertDataFieldsToAgg(statement: n.SelectStatement, nullField?:
         throw new Error('Field is already wrapped by jsonb_agg')
     }
 
+    /**
+     * Limit is not taken in consideration when Aggregrating. This was a bit of surprise to me...
+     * To make this work we have to add the limit to a subquery.
+     */
+    if (statement.limit) {
+        if (statement.source instanceof n.TableRefWithAlias) {
+
+            const subSelect = new n.SelectStatement();
+            subSelect.fields.set(Symbol(), new n.All())
+            subSelect.limit = statement.limit
+            subSelect.source = statement.source.ref;
+            statement.copyOrderBysTo(subSelect)
+            statement.copyWhereClauseTo(subSelect)
+
+            statement.orderByColumns.length = 0
+            statement.clearWhereClause()
+            statement.limit = undefined
+            statement.source = new n.DerivedTable(
+                subSelect,
+                statement.source.alias
+            )
+
+        }
+    }
+
     let orderBy: n.OrderBy | undefined = undefined
     if (statement.orderByColumns.length) {
         orderBy = new n.OrderBy(...statement.orderByColumns)
@@ -73,12 +98,12 @@ export function convertDataFieldsToAgg(statement: n.SelectStatement, nullField?:
                     )
                 )
             ),
-            new n.RawValue('[]', 'jsonb')
+            new n.Cast(new n.RawValue('[]'), 'jsonb')
         )
     } else {
         field = new n.FuncCall('coalesce',
             call,
-            new n.RawValue('[]', 'jsonb')
+            new n.Cast(new n.RawValue('[]'), 'jsonb')
         )
     }
 
@@ -105,7 +130,7 @@ export function addReferencesToChildFields({ src, dest, withPrefix }: SpecialFie
     }
 
     for (let [alias,] of fromSelect.fields) {
-        if (alias && !isHiddenFieldName(alias)) {
+        if (typeof alias === 'string' && !isHiddenFieldName(alias)) {
             if (alias === BuiltinGroups.Data) {
                 addField(dest, BuiltinGroups.Data, withPrefix, new n.Column(alias, target))
             } else {

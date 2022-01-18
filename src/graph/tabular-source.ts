@@ -62,7 +62,7 @@ type Through = {
     rel: NestedRelationType,
 }
 
-export type Item = { type: string } & ToSql
+export type Item = { type: string, order?: number } & ToSql
 
 export enum NestedRelationType {
     Many,
@@ -84,6 +84,8 @@ export function createRootTabularSource(options: TabularSourceOptions) {
 
         // apply all items to the cteSelect
         itemsToSql(items, cteSelect, subCtx)
+
+        console.log(cteSelect.orderByColumns)
 
         json.convertDataFieldsToAgg(cteSelect)
 
@@ -226,7 +228,6 @@ export function createNestedTabularSource(options: TabularSourceOptions, relType
                 json.addField(statement, 'data', name, new n.Column('data', lateralAlias))
 
             } else {
-                console.log(targetTable, parentTable)
 
                 statement.joins.push(new n.Join(
                     JoinType.LEFT_JOIN,
@@ -447,5 +448,7 @@ function getTabularItemsCount(items: readonly Item[]): number {
 }
 
 function itemsToSql(items: readonly Item[], statement: n.SelectStatement, ctx: GraphToSqlContext) {
-    items.forEach(item => item[toSqlKey](statement, ctx))
+    [...items]
+        .sort((a: Item, b: Item) => (a.order ?? 0) - (b.order ?? 0))
+        .forEach(item => item[toSqlKey]!(statement, ctx))
 }

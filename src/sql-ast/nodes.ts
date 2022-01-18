@@ -3,12 +3,9 @@ import { JoinType, OrderDirection, ValidComparisonSign } from "./types"
 import { WhereBuilderResultNode } from '../graph/where-builder'
 import { NodeToSqlContext } from './context'
 
-function formatCast(name?: string) {
-    return name ? '::' + name : ''
-}
 
 export class Operator {
-    constructor(public left: FuncCall | AggCall | RawValue | Column | Subquery | Operator, public operator: string, public right: FuncCall | AggCall | RawValue | Column | Subquery | Operator) { }
+    constructor(public left: FuncCall | AggCall | RawValue | Column | Subquery | Operator | Cast, public operator: string, public right: FuncCall | AggCall | RawValue | Column | Subquery | Operator | Cast) { }
     public toSql(ctx: NodeToSqlContext) {
         this.left.toSql(ctx)
         ctx.formatter.write(' ' + this.operator + ' ')
@@ -98,10 +95,10 @@ export class Or {
         ctx.formatter.write(' OR ')
         this.right.toSql(ctx)
     }
-    and(other: SqlNode) {
+    and(other: SqlNode): And {
         return new And(this, other)
     }
-    or(other: SqlNode) {
+    or(other: SqlNode): Or {
         return new Or(this, other)
     }
 }
@@ -255,24 +252,45 @@ export class OrderBy {
 
         ctx.formatter
             .write('ORDER BY ')
+            .startIndent()
+            .break()
             .join(this.columns, col => col.toSql(ctx), ', ')
 
         if (hasCommonDir && this.columns.length && this.columns[0].mode !== 'ASC') {
             ctx.formatter.write(' ' + this.columns[0].mode)
         }
+
+        ctx.formatter.endIndent()
+    }
+}
+
+export class CompositeType {
+    public items: SqlNode[]
+    constructor(...items: SqlNode[]) {
+        this.items = items
+    }
+    toSql(ctx: NodeToSqlContext) {
+        ctx.formatter
+            .write('(')
+            .join(this.items, (col) => {
+                col.toSql(ctx)
+            }, ',')
+            .write(')')
     }
 }
 
 export class OrderByColumn {
-    constructor(public field: Column, public mode?: OrderDirection) { }
+    constructor(public column: Column | CompositeType, public mode?: OrderDirection) { }
     toSql(ctx: NodeToSqlContext) {
-        this.field.toSql(ctx)
-        ctx.formatter.write(this.mode ? ' ' + this.mode : '')
+        this.column.toSql(ctx)
+        if (this.mode) {
+            ctx.formatter.write(' ' + this.mode)
+        }
     }
 }
 
 export class RawValue {
-    constructor(public value: unknown, public cast?: string) { }
+    constructor(public value: unknown) { }
     toSql(ctx: NodeToSqlContext) {
         let formattedValue = this.value;
         switch (typeof this.value) {
@@ -286,14 +304,14 @@ export class RawValue {
             }
         }
 
-        ctx.formatter.write(`${formattedValue}${formatCast(this.cast)}`)
+        ctx.formatter.write(formattedValue as string)
     }
 }
 
 export class TableRef {
     constructor(public name: string) { }
-    field(fieldName: string, cast?: string) {
-        return new Column(fieldName, this.name, cast)
+    field(fieldName: string) {
+        return new Column(fieldName, this.name)
     }
     allFields() {
         return new All(this.name)
@@ -325,14 +343,14 @@ export class All {
 }
 
 export class Column {
-    constructor(public name: string, public table?: string, public cast?: string) { }
+    constructor(public name: string, public table?: string) { }
     toSql(ctx: NodeToSqlContext) {
         const resolvedTable = this.table ?? ctx.table
         if (typeof resolvedTable === 'string') {
             new TableRef(resolvedTable).toSql(ctx)
-            ctx.formatter.write(`."${this.name}"${formatCast(this.cast)}`)
+            ctx.formatter.write(`."${this.name}"`)
         } else {
-            ctx.formatter.write(`"${this.name}"${formatCast(this.cast)}`)
+            ctx.formatter.write(`"${this.name}"`)
         }
     }
 }
@@ -365,14 +383,15 @@ export class DerivedTable {
         ctx.formatter.write('(')
         ctx.formatter.break()
         this.select.toSql(ctx)
-        ctx.formatter.writeLine(') ' + this.alias)
+        ctx.formatter.writeLine(') ')
+        new TableRef(this.alias).toSql(ctx)
     }
 }
 
 export class Placeholder {
-    constructor(public id: number, public cast?: string) { }
+    constructor(public id: number) { }
     toSql(ctx: NodeToSqlContext) {
-        ctx.formatter.write('$' + this.id + formatCast(this.cast))
+        ctx.formatter.write('$' + this.id)
     }
 }
 
@@ -392,21 +411,88 @@ export class Join {
     }
 }
 
-export type SelectField = Column | Subquery | FuncCall | AggCall | WindowFunc | RawValue | Placeholder | Group | Operator
+type When = {
+    when: SqlNode,
+    then: SqlNode
+}
+
+export class Case {
+    public expression?: SqlNode
+    public branches: When[];
+    public fallback?: SqlNode
+
+    constructor(expression: SqlNode, branches: When[], fallback?: SqlNode)
+    constructor(branches: When[], fallback?: SqlNode)
+    constructor(...args: any[]) {
+        if (args.length === 3) {
+            this.expression = args[0]
+            this.branches = args[1]
+            this.fallback = args[2]
+        } else {
+            this.branches = args[0]
+            this.fallback = args[1]
+        }
+    }
+    toSql(ctx: NodeToSqlContext) {
+        ctx.formatter
+            .write(`CASE`)
+
+        if (this.expression) {
+            ctx.formatter.write(' ')
+            this.expression.toSql(ctx)
+        }
+
+        ctx.formatter
+            .break()
+            .startIndent()
+
+        this.branches.forEach(branch => {
+            ctx.formatter.writeLine('WHEN ')
+            branch.when.toSql(ctx)
+            ctx.formatter.write(' THEN ')
+            branch.then.toSql(ctx)
+            ctx.formatter.break()
+        })
+
+        if (this.fallback) {
+            ctx.formatter.writeLine('ELSE ')
+            this.fallback.toSql(ctx)
+        }
+
+        ctx.formatter.endIndent()
+
+        ctx.formatter.writeLine('END')
+    }
+
+}
+
+export class Cast {
+    constructor(public node: FuncCall | AggCall | Column | RawValue | Group | Placeholder | Cast, public castTo: string) { }
+    toSql(ctx: NodeToSqlContext) {
+        this.node.toSql(ctx)
+        ctx.formatter.write('::' + this.castTo)
+    }
+}
+
+export type SelectField = Column | Subquery | FuncCall | AggCall | WindowFunc | RawValue | Placeholder | Group | Operator | All
 
 export class SelectStatement {
-    public fields = new Map<string, SelectField>()
+    public fields = new Map<string | Symbol, SelectField>()
     public ctes = new Map<string, Cte>()
     public joins: Join[] = [];
     public groupBys: Column[] = [];
     public orderByColumns: OrderByColumn[] = []
-    public source?: TableRefWithAlias | TableRef;
+    public source?: TableRefWithAlias | TableRef | DerivedTable;
     public limit?: number;
     public offset?: number;
     private whereClauseChain?: WhereBuilderResultNode;
 
     hasWhereClause() {
         return !!this.whereClauseChain
+    }
+
+    clearWhereClause() {
+        this.whereClauseChain = undefined
     }
 
     addWhereClause(node: Exclude<WhereBuilderResultNode, undefined>) {
@@ -432,8 +518,16 @@ export class SelectStatement {
         }
     }
     toSql(ctx: NodeToSqlContext) {
+
+        let tableName: string | undefined;
+        if (this.source instanceof TableRefWithAlias) {
+            tableName = this.source.alias
+        } else if (this.source instanceof TableRef) {
+            tableName = this.source.name
+        }
+
         const subCtx: NodeToSqlContext = {
-            table: this.source instanceof TableRefWithAlias ? this.source?.alias : this.source?.name,
+            table: tableName,
             formatter: ctx.formatter,
         };
 
@@ -451,13 +545,14 @@ export class SelectStatement {
         if (!this.fields.size) {
             ctx.formatter.write('1')
         } else {
-            ctx.formatter.join(this.fields.entries(), (field, index) => {
-                const [alias, node] = field
+            ctx.formatter.join(this.fields.entries(), ([alias, node], index) => {
                 if (index > 0) {
                     ctx.formatter.break()
                 }
                 node.toSql(subCtx)
-                ctx.formatter.write(alias ? ` AS "${alias}"` : '')
+                if (typeof alias === 'string') {
+                    ctx.formatter.write(` AS "${alias}"`)
+                }
             }, ',')
         }
 
@@ -494,6 +589,7 @@ export class SelectStatement {
         }
 
         if (this.orderByColumns.length) {
+            ctx.formatter.break()
             new OrderBy(...this.orderByColumns).toSql(subCtx)
         }
 

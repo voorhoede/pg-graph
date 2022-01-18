@@ -6,7 +6,8 @@ import { Plugin, PluginType } from '../utils'
 /**
  * This is the most simple form of pagination 
  * 
- * It uses offset and limit
+ * It uses offset and limit and can be used if the pagination is very simple and there are not a lot of pages
+ * However offset limit pagination does not really scale -> https://use-the-index-luke.com/sql/partial-results/fetch-next-page
  */
 
 type OffsetLimitPaginationOptions = {
@@ -26,7 +27,7 @@ function parseUint(value: any, fallback: number) {
     if (Number.isNaN(num)) {
         return fallback
     }
-    return num >= 0 ? value : fallback
+    return num >= 1 ? value : fallback
 }
 
 function createPaginationItem(options: OffsetLimitPaginationOptions): Item {
@@ -37,6 +38,7 @@ function createPaginationItem(options: OffsetLimitPaginationOptions): Item {
             const page = parseUint(options.page, defaultPaginationOptions.page)
 
             statement.limit = pageSize
+            statement.offset = page * pageSize
 
             const subCount = new n.SelectStatement()
             subCount.source = new n.TableRef(ctx.table!)
@@ -46,7 +48,7 @@ function createPaginationItem(options: OffsetLimitPaginationOptions): Item {
                     new n.Operator(
                         new n.AggCall('count', [new n.All()]),
                         '/',
-                        new n.RawValue(pageSize, 'float')
+                        new n.Cast(new n.RawValue(pageSize), 'float')
                     )
                 )
             )
@@ -57,24 +59,24 @@ function createPaginationItem(options: OffsetLimitPaginationOptions): Item {
 
             json.addField(statement, groupName, 'pageCount', subQuery)
             json.addField(statement, groupName, 'rowCount', new n.AggCall('count', [new n.All()]))
-            json.addField(statement, groupName, 'page', new n.RawValue(page, 'int'))
-            json.addField(statement, groupName, 'pageSize', new n.RawValue(pageSize, 'float'))
+            json.addField(statement, groupName, 'page', new n.Cast(new n.RawValue(page), 'int'))
+            json.addField(statement, groupName, 'pageSize', new n.Cast(new n.RawValue(pageSize), 'float'))
         }
     }
 }
 
 declare module '../../graph/tabular-source' {
     interface TabularSourcePlugins {
-        pagination(offset: number): TabularSource
+        pagination(options: OffsetLimitPaginationOptions): TabularSource
     }
 }
 
-export function offsetLimitPagination(options: OffsetLimitPaginationOptions = defaultPaginationOptions): Plugin {
+export function offsetLimitPagination(): Plugin {
     return {
         type: PluginType.TabularSource,
         mount(ctx) {
             return {
-                pagination(this: TabularSource) {
+                pagination(this: TabularSource, options: OffsetLimitPaginationOptions = defaultPaginationOptions) {
                     ctx.addItem(createPaginationItem(options))
                     return this
                 }
