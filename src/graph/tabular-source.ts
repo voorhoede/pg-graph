@@ -118,7 +118,7 @@ export function createRootTabularSource(options: TabularSourceOptions) {
 }
 
 export function createNestedTabularSource(options: TabularSourceOptions, relType: NestedRelationType, foreignKey?: string, through?: Through[]) {
-    return createBaseTabularSource(options, ({ targetTable, statement, ctx, items, name }) => {
+    return createBaseTabularSource(options, ({ targetTable, statement, ctx, items, name, countCondition }) => {
         const parentTableAlias = ctx.tableAlias!
         const parentTable = ctx.table!
         const targetTableAlias = ctx.genTableAlias(targetTable)
@@ -170,6 +170,9 @@ export function createNestedTabularSource(options: TabularSourceOptions, relType
                     options.ctx.createPlaceholderForValue(countCondition.value)
                 )
             }
+
+            const derivedAlias = ctx.genTableAlias(targetTable);
+            const derivedTable = new n.DerivedTable(subStatement, derivedAlias)
 
             statement.joins.push(new n.Join(
                 countCondition?.operator === '>=' && countCondition.value >= 1 ? JoinType.INNER_JOIN : JoinType.LEFT_JOIN,
