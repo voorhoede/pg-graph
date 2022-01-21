@@ -20,6 +20,7 @@ export type TabularSourceBuilder = (source: TabularSource & TabularSourcePlugins
 
 export interface TabularSource extends TabularChain, ToSql {
     type: GraphItemTypes.TABLE,
+    atLeast(count: number): TabularSource,
     agg(builderHandler: (builder: AggBuilder) => void): TabularSource,
     limit(count: number): TabularSource,
     alias(name: string): TabularSource,
@@ -53,9 +54,14 @@ type TabularSourceToSqlOptions = {
     name: string,
     statement: n.SelectStatement,
     items: readonly Item[],
-    through?: Through
+    through?: Through,
+    countCondition?: CountCondition,
 };
 
+type CountCondition = {
+    operator: '>=' | '<='
+    value: number
+}
 type Through = {
     table: string,
     foreignKey?: string,
@@ -157,11 +163,16 @@ export function createNestedTabularSource(options: TabularSourceOptions, relType
             subStatement.fields.set(json.createHiddenFieldName('group'), groupByField)
             subStatement.groupBys.push(groupByField)
 
-            const derivedAlias = ctx.genTableAlias(targetTable);
-            const derivedTable = new n.DerivedTable(subStatement, derivedAlias)
+            if (countCondition?.operator === '>=' && countCondition.value > 1) {
+                subStatement.having = new n.Compare(
+                    new n.AggCall('count', [new n.All(targetTableAlias)]),
+                    countCondition.operator,
+                    options.ctx.createPlaceholderForValue(countCondition.value)
+                )
+            }
 
             statement.joins.push(new n.Join(
-                JoinType.LEFT_JOIN,
+                countCondition?.operator === '>=' && countCondition.value >= 1 ? JoinType.INNER_JOIN : JoinType.LEFT_JOIN,
                 derivedTable,
                 new n.Compare(
                     new n.Column(json.createHiddenFieldName('group'), derivedAlias),
@@ -340,6 +351,7 @@ function createBaseTabularSource({ ctx, name, builder }: TabularSourceOptions, t
     const items: Item[] = []
 
     let alias: string
+    let countCondition: CountCondition | undefined
 
     const addItem = (item: Item) => items.push(item)
 
@@ -347,6 +359,10 @@ function createBaseTabularSource({ ctx, name, builder }: TabularSourceOptions, t
         type: GraphItemTypes.TABLE,
         limit(count: number) {
             addItem(createLimit(count))
+            return this
+        },
+        atLeast(count: number) {
+            countCondition = { operator: '>=', value: count }
             return this
         },
         agg(builderHandler: (builder: AggBuilder) => void) {
@@ -434,6 +450,7 @@ function createBaseTabularSource({ ctx, name, builder }: TabularSourceOptions, t
                 targetTable: name,
                 name: alias ?? name,
                 items,
+                countCondition,
             })
         }
     }
