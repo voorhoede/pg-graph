@@ -474,6 +474,16 @@ export class Cast {
     }
 }
 
+export class Having {
+    constructor(public node: Compare) { }
+    toSql(ctx: NodeToSqlContext) {
+        ctx.formatter.writeLine('HAVING')
+        ctx.formatter.break()
+        ctx.formatter.startIndent()
+        this.node.toSql(ctx)
+        ctx.formatter.endIndent()
+    }
+}
 export type SelectField = Column | Subquery | FuncCall | AggCall | WindowFunc | RawValue | Placeholder | Group | Operator | All
 
 export class SelectStatement {
@@ -485,6 +495,7 @@ export class SelectStatement {
     public source?: TableRefWithAlias | TableRef | DerivedTable;
     public limit?: number;
     public offset?: number;
+    public having?: Compare;
     private whereClauseChain?: WhereBuilderResultNode;
 
     hasWhereClause() {
@@ -586,6 +597,14 @@ export class SelectStatement {
         if (this.groupBys.length) {
             ctx.formatter.writeLine('GROUP BY ')
             ctx.formatter.join(this.groupBys, groupByCol => groupByCol.toSql(subCtx), ', ')
+        }
+
+        if (this.having) {
+            ctx.formatter.writeLine('HAVING')
+            ctx.formatter.break()
+            ctx.formatter.startIndent()
+            this.having.toSql(ctx)
+            ctx.formatter.endIndent()
         }
 
         if (this.orderByColumns.length) {

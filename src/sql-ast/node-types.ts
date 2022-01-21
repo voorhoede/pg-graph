@@ -30,7 +30,8 @@ export type SqlNode =
     n.WindowFunc |
     n.Case |
     n.CompositeType |
-    n.Cast
+    n.Cast |
+    n.Having
 
 export function isSqlNode(n: any): n is SqlNode {
     return n.type && n.toSql
