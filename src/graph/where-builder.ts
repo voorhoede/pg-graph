@@ -3,12 +3,12 @@ import { ValidComparisonSign, n } from "../sql-ast"
 import { isSqlNode, SqlNode } from "../sql-ast/node-types"
 import { GraphBuildContext } from "./context"
 
-export type LogicalOpType = 'and' | 'or'
+export type LogicalOperator = 'and' | 'or'
 
 export interface WhereBuilderChain {
-    and(f: (b: WhereBuilder) => void): WhereBuilderChain,
+    and(handler: (b: WhereBuilder) => void): WhereBuilderChain,
     and(name: string, comparison: ValidComparisonSign, value: unknown): WhereBuilderChain,
-    or(f: (b: WhereBuilder) => void): WhereBuilderChain,
+    or(handler: (b: WhereBuilder) => void): WhereBuilderChain,
     or(name: string, comparison: ValidComparisonSign, value: unknown): WhereBuilderChain,
 }
 
@@ -19,32 +19,21 @@ export type WhereBuilderResult = {
     get node(): WhereBuilderResultNode
 }
 
-type Output = { builder: WhereBuilder, result: WhereBuilderResult };
-
 /**
  * Creates a where builder which allows you to construct a complex 'where statement' containing multiple AND / OR and even nested combinations
  * @param ctx 
  * @returns 
  */
-export function createWhereBuilder(ctx: GraphBuildContext): Output {
+export function createWhereBuilder(ctx: GraphBuildContext) {
 
     const fields: n.Column[] = []
 
-    function createBuilderGroup(groupOp: LogicalOpType): Output {
+    function createBuilderGroup(groupOp: LogicalOperator): { builder: WhereBuilder, result: WhereBuilderResult } {
         let resultNode: WhereBuilderResultNode = undefined
 
-        const add = (op: LogicalOpType) => (nameOrBuilderHandler: ((b: WhereBuilder) => void) | string, comparison?: ValidComparisonSign, value?: unknown): WhereBuilderChain => {
-            if (typeof nameOrBuilderHandler === 'string') { // name, comparison, value
-                addOp(op, nameOrBuilderHandler, comparison!, value)
-            } else { // subbuilder
-                addGroup(op, nameOrBuilderHandler)
-            }
-            return chain
-        }
-
         const chain: WhereBuilderChain = {
-            and: add('and'),
-            or: add('or')
+            and: createOperatorMethod('and'),
+            or: createOperatorMethod('or')
         }
 
         function createNodeForValue(value: unknown): SqlNode {
@@ -54,7 +43,18 @@ export function createWhereBuilder(ctx: GraphBuildContext): Output {
             return ctx.createPlaceholderForValue(value)
         }
 
-        function addOp(op: LogicalOpType, name: string, comparison: ValidComparisonSign, value: unknown) {
+        function createOperatorMethod(operator: LogicalOperator) {
+            return function (nameOrBuilderHandler: ((b: WhereBuilder) => void) | string, comparison?: ValidComparisonSign, value?: unknown): WhereBuilderChain {
+                if (typeof nameOrBuilderHandler === 'string') { // name, comparison, value
+                    addOperator(operator, nameOrBuilderHandler, comparison!, value)
+                } else { // subbuilder
+                    addGroup(operator, nameOrBuilderHandler)
+                }
+                return chain
+            }
+        }
+
+        function addOperator(op: LogicalOperator, name: string, comparison: ValidComparisonSign, value: unknown) {
             let valueNode: SqlNode;
 
             if ((comparison === 'IN' || comparison === 'NOT IN')) {
@@ -80,7 +80,7 @@ export function createWhereBuilder(ctx: GraphBuildContext): Output {
             }
         }
 
-        function addGroup(op: LogicalOpType, builderHandler: (b: WhereBuilder) => void) {
+        function addGroup(op: LogicalOperator, builderHandler: (b: WhereBuilder) => void) {
             const { builder, result } = createBuilderGroup(op)
             builderHandler(builder)
             if (result.node) {
@@ -107,7 +107,7 @@ export function createWhereBuilder(ctx: GraphBuildContext): Output {
                 get node() {
                     let node: WhereBuilderResultNode = resultNode
                     if (node && node instanceof n.Group) {
-                        node = node.unwrap() as WhereBuilderResultNode
+                        node = node.node as WhereBuilderResultNode
                     }
                     return node
                 },

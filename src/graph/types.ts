@@ -13,6 +13,11 @@ export enum GraphItemTypes {
     AGG = 'agg',
 }
 
+export enum RelationType {
+    Many,
+    One,
+}
+
 export type ToSql = {
     [toSqlKey]: (statement: n.SelectStatement, ctx: GraphToSqlContext) => void
 }

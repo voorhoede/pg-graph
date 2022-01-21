@@ -1,10 +1,10 @@
 import { n } from "../sql-ast";
-import { NestedRelationType } from "./tabular-source";
+import { RelationType } from "./types";
 
 type Table = n.TableRefWithAlias | n.TableRef
 
-export function createComparison(type: NestedRelationType, ownTable: Table, otherTable: Table, foreignKey?: string) {
-    if (type === NestedRelationType.Many) {
+export function createComparison(type: RelationType, ownTable: Table, otherTable: Table, foreignKey?: string) {
+    if (type === RelationType.Many) {
         return new n.Compare(
             getOneBelongsToManyColumnRef(ownTable, otherTable, foreignKey),
             '=',

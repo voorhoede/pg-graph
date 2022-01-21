@@ -362,9 +362,6 @@ export class Group {
         this.node.toSql(ctx)
         ctx.formatter.write(')')
     }
-    unwrap() {
-        return this.node
-    }
 }
 
 export class Subquery {
@@ -484,6 +481,7 @@ export class Having {
         ctx.formatter.endIndent()
     }
 }
+
 export type SelectField = Column | Subquery | FuncCall | AggCall | WindowFunc | RawValue | Placeholder | Group | Operator | All
 
 export class SelectStatement {

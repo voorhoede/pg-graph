@@ -16,10 +16,6 @@ export type AggBuilderResult = {
     addToStatement(statement: n.SelectStatement): void
 }
 
-type AggBuilderOutput = { builder: AggBuilder, result: AggBuilderResult };
-
-type AggItem = (statement: n.SelectStatement) => void;
-
 export type AggOptions = {
     column: string,
     alias?: string,
@@ -29,8 +25,8 @@ export type AggOptions = {
 
 export type AggOptionsWithOptionalColumn = Partial<AggOptions> & Omit<AggOptions, 'column'>
 
-export function createAggBuilder(ctx: GraphBuildContext): AggBuilderOutput {
-    const aggs: Array<AggItem> = [];
+export function createAggBuilder(ctx: GraphBuildContext): { builder: AggBuilder, result: AggBuilderResult } {
+    const aggs: Array<(statement: n.SelectStatement) => void> = [];
     let tableContext: string
 
     type AvgCallFieldOptions = {
@@ -42,7 +38,7 @@ export function createAggBuilder(ctx: GraphBuildContext): AggBuilderOutput {
         filter?: (builderHandler: WhereBuilder) => void
     }
 
-    function addAvgCallField({ statement, funcName, arg, alias, distinct, filter }: AvgCallFieldOptions) {
+    function addAggCallField({ statement, funcName, arg, alias, distinct, filter }: AvgCallFieldOptions) {
         const { builder, result } = createWhereBuilder(ctx)
 
         if (filter) {
@@ -64,7 +60,7 @@ export function createAggBuilder(ctx: GraphBuildContext): AggBuilderOutput {
     function createSimpleAggMethod(name: string) {
         return function (this: AggBuilder, options: AggOptions) {
             aggs.push((statement) => {
-                addAvgCallField({
+                addAggCallField({
                     statement,
                     funcName: name,
                     arg: new n.Column(options.column, tableContext),
@@ -81,7 +77,7 @@ export function createAggBuilder(ctx: GraphBuildContext): AggBuilderOutput {
         builder: {
             count(options: AggOptionsWithOptionalColumn = {}) {
                 aggs.push((statement) => {
-                    addAvgCallField({
+                    addAggCallField({
                         statement,
                         funcName: 'count',
                         arg: options.column ? new n.Column(options.column, tableContext) : new n.All(tableContext),
