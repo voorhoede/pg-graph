@@ -1,9 +1,8 @@
 import { n } from "../sql-ast";
 import { RelationType } from "./types";
 
-type Table = n.TableRefWithAlias | n.TableRef
 
-export function createComparison(type: RelationType, ownTable: Table, otherTable: Table, foreignKey?: string) {
+export function createComparison(type: RelationType, ownTable: n.TableRef, otherTable: n.TableRef, foreignKey?: string) {
     if (type === RelationType.Many) {
         return new n.Compare(
             getOneBelongsToManyColumnRef(ownTable, otherTable, foreignKey),
@@ -31,8 +30,8 @@ export function createComparison(type: RelationType, ownTable: Table, otherTable
  * @param foreignKey 
  * @returns 
  */
-export function getOneBelongsToManyColumnRef(oneTable: Table, manyTable: Table, foreignKey?: string) {
-    return new n.Column(getForeignKey(foreignKey, name(manyTable)), aliasOrName(oneTable))
+export function getOneBelongsToManyColumnRef(oneTable: n.TableRef, manyTable: n.TableRef, foreignKey?: string) {
+    return new n.Column(getForeignKey(foreignKey, name(manyTable)), oneTable.name)
 }
 
 /**
@@ -50,24 +49,16 @@ export function getOneBelongsToManyColumnRef(oneTable: Table, manyTable: Table, 
  * @param foreignKey 
  * @returns 
  */
-export function getOneHasOneColumnRef(ownTable: Table, otherTable: Table, foreignKey?: string) {
-    return new n.Column(getForeignKey(foreignKey, name(otherTable)), aliasOrName(ownTable))
+export function getOneHasOneColumnRef(ownTable: n.TableRef, otherTable: n.TableRef, foreignKey?: string) {
+    return new n.Column(getForeignKey(foreignKey, name(otherTable)), ownTable.name)
 }
 
-export function getOwnColumnRef(table: Table) {
-    return new n.Column('id', aliasOrName(table))
+export function getOwnColumnRef(table: n.TableRef) {
+    return new n.Column('id', table.name)
 }
 
-function name(table: Table) {
-    return hasAlias(table) ? table.ref.name : table.name
-}
-
-function aliasOrName(table: Table) {
-    return hasAlias(table) ? table.alias : table.name
-}
-
-function hasAlias(table: any): table is n.TableRefWithAlias {
-    return !!table.alias
+function name(table: n.TableRef) {
+    return table instanceof n.TableRefWithAlias ? table.ref.name : table.name
 }
 
 function getForeignKey(key: string | null | undefined, orGuessFromTable: string) {

@@ -10,7 +10,7 @@ export function createAgg(result: AggBuilderResult): Agg {
         type: GraphItemTypes.AGG,
 
         [toSqlKey](statement, ctx) {
-            result.setTableContext(ctx.tableAlias!)
+            result.setTableContext(ctx.table!)
             result.addToStatement(statement)
         }
     }

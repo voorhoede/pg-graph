@@ -1,9 +1,10 @@
 import { createGraphBuildContext, createGraphToSqlContext, GraphBuildContext } from "./context";
-import { createRootTabularSource, TabularSourceBuilder, TabularSource } from "./tabular-source";
 import { json, n } from "../sql-ast";
 import { toSqlKey } from "./types";
 import { createFormatter } from "../sql-ast/formatting";
 import { createNodeToSqlContext } from "../sql-ast/context";
+import { TabularSource, TabularSourceBuilder } from './tabular-source/types'
+import { createRootTabularSource } from './tabular-source/root-tabular-source'
 
 export type GraphQueryToSqlOptions = {
     prettifyJson?: boolean
@@ -16,7 +17,7 @@ export function graphQuery() {
     return {
         source(name: string, builder: TabularSourceBuilder) {
             const item = createRootTabularSource({
-                ctx: graphBuildContext,
+                buildContext: graphBuildContext,
                 name,
                 builder
             });

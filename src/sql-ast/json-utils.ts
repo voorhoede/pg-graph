@@ -67,7 +67,7 @@ export function convertDataFieldsToAgg(statement: n.SelectStatement, nullField?:
             statement.limit = undefined
             statement.source = new n.DerivedTable(
                 subSelect,
-                statement.source.alias
+                statement.source.name
             )
 
         }

@@ -12,7 +12,7 @@ export type AggBuilder = {
 };
 
 export type AggBuilderResult = {
-    setTableContext(name: string): void
+    setTableContext(table: n.TableRef): void
     addToStatement(statement: n.SelectStatement): void
 }
 
@@ -20,14 +20,14 @@ export type AggOptions = {
     column: string,
     alias?: string,
     distinct?: boolean,
-    filter?: (builderHandler: WhereBuilder) => void,
+    filter?: (builder: WhereBuilder) => void,
 }
 
 export type AggOptionsWithOptionalColumn = Partial<AggOptions> & Omit<AggOptions, 'column'>
 
 export function createAggBuilder(ctx: GraphBuildContext): { builder: AggBuilder, result: AggBuilderResult } {
     const aggs: Array<(statement: n.SelectStatement) => void> = [];
-    let tableContext: string
+    let tableContext: n.TableRef
 
     type AvgCallFieldOptions = {
         statement: n.SelectStatement,
@@ -35,7 +35,7 @@ export function createAggBuilder(ctx: GraphBuildContext): { builder: AggBuilder,
         arg: SqlNode,
         alias?: string,
         distinct?: boolean,
-        filter?: (builderHandler: WhereBuilder) => void
+        filter?: (builder: WhereBuilder) => void
     }
 
     function addAggCallField({ statement, funcName, arg, alias, distinct, filter }: AvgCallFieldOptions) {
@@ -63,7 +63,7 @@ export function createAggBuilder(ctx: GraphBuildContext): { builder: AggBuilder,
                 addAggCallField({
                     statement,
                     funcName: name,
-                    arg: new n.Column(options.column, tableContext),
+                    arg: tableContext.column(options.column),
                     alias: options.alias,
                     filter: options.filter,
                     distinct: options.distinct,
@@ -80,7 +80,7 @@ export function createAggBuilder(ctx: GraphBuildContext): { builder: AggBuilder,
                     addAggCallField({
                         statement,
                         funcName: 'count',
-                        arg: options.column ? new n.Column(options.column, tableContext) : new n.All(tableContext),
+                        arg: options.column ? tableContext.column(options.column) : tableContext.allColumns(),
                         alias: options.alias,
                         distinct: options.distinct,
                     })
@@ -93,13 +93,13 @@ export function createAggBuilder(ctx: GraphBuildContext): { builder: AggBuilder,
             max: createSimpleAggMethod('max'),
         },
         result: {
-            addToStatement(statement: n.SelectStatement) {
+            addToStatement(statement) {
                 aggs.forEach(agg => {
                     agg(statement)
                 })
             },
-            setTableContext(name: string) {
-                tableContext = name
+            setTableContext(ref) {
+                tableContext = ref
             }
         }
     }

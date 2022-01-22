@@ -1,5 +1,5 @@
 import { GraphBuildContext } from '../../graph/context'
-import { Item, TabularSource } from '../../graph/tabular-source'
+import { Item, TabularSource } from '../../graph/tabular-source/types'
 import { toSqlKey } from '../../graph/types'
 import { n, OrderDirection } from '../../sql-ast'
 import { Plugin, PluginType } from '../utils'
@@ -120,7 +120,7 @@ function createPaginationItem(ctx: GraphBuildContext, options: KeysetPaginationO
 
         statement.source = new n.DerivedTable(
             selectExactPageSize,
-            (statement.source as n.TableRefWithAlias).alias
+            (statement.source as n.TableRef).name
         )
     }
 
@@ -136,7 +136,7 @@ function createPaginationItem(ctx: GraphBuildContext, options: KeysetPaginationO
     }
 }
 
-declare module '../../graph/tabular-source' {
+declare module '../../graph/tabular-source/types' {
     interface TabularSourcePlugins {
         keysetPagination(options: KeysetPaginationOptions): TabularSource
     }

@@ -310,22 +310,24 @@ export class RawValue {
 
 export class TableRef {
     constructor(public name: string) { }
-    field(fieldName: string) {
-        return new Column(fieldName, this.name)
-    }
-    allFields() {
+    allColumns() {
         return new All(this.name)
+    }
+    column(name: string) {
+        return new Column(name, this.name)
     }
     toSql(ctx: NodeToSqlContext) {
         ctx.formatter.write(`"${this.name}"`)
     }
 }
 
-export class TableRefWithAlias {
-    constructor(public ref: TableRef, public alias: string) { }
+export class TableRefWithAlias extends TableRef {
+    constructor(public ref: TableRef, name: string) {
+        super(name)
+    }
     toSql(ctx: NodeToSqlContext) {
         this.ref.toSql(ctx)
-        ctx.formatter.write(' ' + this.alias)
+        ctx.formatter.write(' ' + this.name)
     }
 }
 
@@ -529,9 +531,7 @@ export class SelectStatement {
     toSql(ctx: NodeToSqlContext) {
 
         let tableName: string | undefined;
-        if (this.source instanceof TableRefWithAlias) {
-            tableName = this.source.alias
-        } else if (this.source instanceof TableRef) {
+        if (this.source instanceof TableRef) {
             tableName = this.source.name
         }
 

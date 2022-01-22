@@ -15,7 +15,7 @@ export interface WhereBuilderChain {
 export type WhereBuilderResultNode = n.Compare | n.And | n.Or | n.Group | undefined
 export type WhereBuilder = (nameOrBuilderHandler: ((b: WhereBuilder) => void) | string, comparison?: ValidComparisonSign, value?: unknown) => WhereBuilderChain
 export type WhereBuilderResult = {
-    setTableContext(name: string): void
+    setTableContext(ref: n.TableRef): void
     get node(): WhereBuilderResultNode
 }
 
@@ -99,9 +99,9 @@ export function createWhereBuilder(ctx: GraphBuildContext) {
                 return (chain[groupOp] as WhereBuilder)(nameOrBuilderHandler, comparison, value)
             },
             result: {
-                setTableContext(name: string) {
+                setTableContext(ref) {
                     fields.forEach(field => {
-                        field.table = name
+                        field.table = ref.name
                     })
                 },
                 get node() {

@@ -1,4 +1,4 @@
-import { Item, TabularSource } from '../../graph/tabular-source'
+import { Item, TabularSource } from '../../graph/tabular-source/types'
 import { toSqlKey } from '../../graph/types'
 import { json, n } from '../../sql-ast'
 import { Plugin, PluginType } from '../utils'
@@ -41,7 +41,7 @@ function createPaginationItem(options: OffsetLimitPaginationOptions): Item {
             statement.offset = page * pageSize
 
             const subCount = new n.SelectStatement()
-            subCount.source = new n.TableRef(ctx.table!)
+            subCount.source = ctx.table
 
             subCount.fields.set('pageCount',
                 new n.FuncCall('ceil',
@@ -65,7 +65,7 @@ function createPaginationItem(options: OffsetLimitPaginationOptions): Item {
     }
 }
 
-declare module '../../graph/tabular-source' {
+declare module '../../graph/tabular-source/types' {
     interface TabularSourcePlugins {
         pagination(options: OffsetLimitPaginationOptions): TabularSource
     }

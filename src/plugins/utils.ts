@@ -1,7 +1,7 @@
 
 
 import { GraphBuildContext } from "../graph/context";
-import { Item } from "../graph/tabular-source"
+import { Item } from "../graph/tabular-source/types"
 
 export enum PluginType {
     TabularSource,

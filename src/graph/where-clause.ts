@@ -11,7 +11,7 @@ export function createWhereClause(builderResult: WhereBuilderResult): Where {
 
         [toSqlKey](statement, ctx) {
             if (builderResult.node) {
-                builderResult.setTableContext(ctx.tableAlias!)
+                builderResult.setTableContext(ctx.table!)
                 statement.addWhereClause(builderResult.node)
             }
         }

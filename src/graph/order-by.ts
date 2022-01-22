@@ -10,7 +10,7 @@ export function createOrderBy(name: string, mode?: OrderDirection): OrderBy {
     return {
         type: GraphItemTypes.ORDER_BY,
         [toSqlKey](statement, ctx) {
-            statement.orderByColumns.push(new n.OrderByColumn(new n.Column(name, ctx.tableAlias), mode))
+            statement.orderByColumns.push(new n.OrderByColumn(ctx.table!.column(name), mode))
         }
     }
 }

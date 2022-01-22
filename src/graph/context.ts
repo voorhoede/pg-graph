@@ -29,8 +29,7 @@ export function createGraphBuildContext(): GraphBuildContext {
 }
 
 export type GraphToSqlContext = {
-    table?: string,
-    tableAlias?: string,
+    table?: n.TableRefWithAlias,
     subRelationCount?: number,
     depth: number,
     createSubContext(): GraphToSqlContext,
