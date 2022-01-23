@@ -2,12 +2,12 @@ import { JoinType, n } from "../../sql-ast"
 import { GraphBuildContext, GraphToSqlContext } from "../context"
 import { RelationType } from "../types"
 import { Item, TabularChain, TabularSource, TabularSourceBuilder } from "./types"
-import * as joinHelpers from '../join-helpers'
+import * as joinHelpers from './join-helpers'
 import { createNestedTabularSource } from "./nested-tabular-source"
-import { exhaustiveCheck } from "./utils"
+import { exhaustiveCheck } from "../../utils"
 
 export type ThroughItem = {
-    table: string,
+    tableName: string,
     foreignKey?: string,
     rel: RelationType,
 }
@@ -26,7 +26,7 @@ export function createThroughChain({ buildContext, initialThrough, addTabularSou
     return {
         throughMany(table: string, foreignKey?: string) {
             throughs.push({
-                table,
+                tableName: table,
                 foreignKey,
                 rel: RelationType.Many,
             })
@@ -34,7 +34,7 @@ export function createThroughChain({ buildContext, initialThrough, addTabularSou
         },
         throughOne(table: string, foreignKey?: string) {
             throughs.push({
-                table,
+                tableName: table,
                 foreignKey,
                 rel: RelationType.One,
             })
@@ -69,8 +69,8 @@ export function applyThroughItemsToStatement(ctx: GraphToSqlContext, statement: 
     let prevThroughTableRef: n.TableRefWithAlias | undefined;
 
     for (let throughItem of items) {
-        const throughTableAlias = ctx.genTableAlias(throughItem.table)
-        const throughTableRef = new n.TableRefWithAlias(new n.TableRef(throughItem.table), throughTableAlias)
+        const throughTableAlias = ctx.genTableAlias(throughItem.tableName)
+        const throughTableRef = new n.TableRefWithAlias(new n.TableRef(throughItem.tableName), throughTableAlias)
 
         if (throughItem.rel === RelationType.One) {
             statement.joins.push(new n.Join(
@@ -84,14 +84,17 @@ export function applyThroughItemsToStatement(ctx: GraphToSqlContext, statement: 
                 )
             ))
         } else if (throughItem.rel === RelationType.Many) {
+            // comment.blog_id
+            // blog.id
+
             statement.joins.push(new n.Join(
                 JoinType.INNER_JOIN,
                 throughTableRef,
                 joinHelpers.createComparison(
                     throughItem.rel,
-                    throughTableRef,
-                    prevThroughTableRef ?? targetTableRef,
-                    prevThroughItem ? prevThroughItem.foreignKey : throughItem.foreignKey,
+                    prevThroughTableRef ?? targetTableRef, /// 
+                    throughTableRef, //... points to many other...
+                    prevThroughItem?.foreignKey,
                 )
             ))
         } else {

@@ -45,7 +45,7 @@ export function createBaseTabularSource({ buildContext, name, builder }: Tabular
 
         throughMany(table: string, foreignKey?: string) {
             const initialThrough: ThroughItem = {
-                table,
+                tableName: table,
                 foreignKey,
                 rel: RelationType.Many,
             }
@@ -55,7 +55,7 @@ export function createBaseTabularSource({ buildContext, name, builder }: Tabular
 
         throughOne(table: string, foreignKey?: string) {
             const initialThrough: ThroughItem = {
-                table,
+                tableName: table,
                 foreignKey,
                 rel: RelationType.One,
             }

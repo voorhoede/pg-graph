@@ -1,6 +1,5 @@
-import { n } from "../sql-ast";
-import { RelationType } from "./types";
-
+import { n } from "../../sql-ast";
+import { RelationType } from "../types";
 
 export function createComparison(type: RelationType, ownTable: n.TableRef, otherTable: n.TableRef, foreignKey?: string) {
     if (type === RelationType.Many) {

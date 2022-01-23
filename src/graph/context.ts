@@ -1,4 +1,5 @@
 import { n } from "../sql-ast";
+import { jsTypeToPgType } from "../utils";
 
 export type GraphBuildContext = {
     createPlaceholderForValue(value: any): n.Cast | n.Placeholder
@@ -60,14 +61,5 @@ function tableAliasCreator() {
         next() {
             return String.fromCharCode(alias++)
         }
-    }
-}
-
-function jsTypeToPgType(value: any) {
-    switch (typeof value) {
-        case 'string':
-            return 'text'
-        case 'number':
-            return 'int'
     }
 }

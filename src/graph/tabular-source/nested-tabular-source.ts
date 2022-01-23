@@ -3,8 +3,9 @@ import { RelationType } from "../types"
 import { createBaseTabularSource } from "./base-tabular-source"
 import { applyThroughItemsToStatement, ThroughCollection } from "./through-chain"
 import { TabularSourceOptions } from "./types"
-import { exhaustiveCheck, itemsToSql } from "./utils"
-import * as joinHelpers from '../join-helpers'
+import { exhaustiveCheck } from "../../utils"
+import * as joinHelpers from './join-helpers'
+import { itemsToSql } from "./items-to-sql"
 
 export function createNestedTabularSource(options: TabularSourceOptions, relType: RelationType, foreignKey?: string, through?: ThroughCollection) {
     return createBaseTabularSource(options, ({ targetTableName, statement, ctx, items, name, countCondition }) => {
@@ -37,7 +38,7 @@ export function createNestedTabularSource(options: TabularSourceOptions, relType
                     ctx,
                     subStatement,
                     [...through].reverse(),
-                    subStatement.source
+                    targetTable
                 )
 
                 groupByField = joinHelpers.getOneHasOneColumnRef(lastThroughTableRef!, parentTable.ref, lastThroughItem!.foreignKey)
@@ -81,8 +82,8 @@ export function createNestedTabularSource(options: TabularSourceOptions, relType
             if (through?.length) {
                 const [source, ...remainingThroughItems] = through;
 
-                const sourceTableAlias = ctx.genTableAlias(source.table)
-                subStatement.source = new n.TableRefWithAlias(new n.TableRef(source.table), sourceTableAlias)
+                const sourceTableAlias = ctx.genTableAlias(source.tableName)
+                subStatement.source = new n.TableRefWithAlias(new n.TableRef(source.tableName), sourceTableAlias)
                 subStatement.addWhereClause(
                     joinHelpers.createComparison(
                         source.rel,

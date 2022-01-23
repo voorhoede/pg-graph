@@ -6,7 +6,7 @@ export type CountCondition = {
     requiresAtLeast(count: number): boolean;
 }
 
-type CountConditionOperator = '>='
+export type CountConditionOperator = '>='
 
 export function createCountCondition(buildCtx: GraphBuildContext, operator: CountConditionOperator, value: number) {
     return {

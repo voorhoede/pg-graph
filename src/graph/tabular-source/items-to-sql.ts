@@ -9,7 +9,3 @@ export function itemsToSql(items: readonly Item[], statement: SelectStatement, c
         .forEach(item => item[toSqlKey]!(statement, ctx))
 }
 
-
-export function exhaustiveCheck(param: never): never {
-    throw new Error('should not reach here')
-}

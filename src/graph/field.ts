@@ -1,5 +1,4 @@
 import { GraphItemTypes, ToSql, toSqlKey } from "./types";
-import * as n from "../sql-ast/nodes";
 import { json } from "../sql-ast";
 import { BuiltinGroups } from "../sql-ast/json-utils";
 

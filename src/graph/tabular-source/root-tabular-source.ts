@@ -2,7 +2,7 @@
 import { JoinType, json, n } from "../../sql-ast";
 import { createBaseTabularSource } from "./base-tabular-source";
 import { TabularSourceOptions } from "./types";
-import { itemsToSql } from "./utils";
+import { itemsToSql } from "./items-to-sql";
 
 export function createRootTabularSource(options: TabularSourceOptions) {
     return createBaseTabularSource(options, ({ targetTableName, statement, ctx, items, name, countCondition }) => {

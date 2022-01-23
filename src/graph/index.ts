@@ -32,13 +32,13 @@ export function graphQuery() {
                 source[toSqlKey](statement, graphToSqlCtx)
             })
 
-            if (options?.prettifyJson) {
-                const data = statement.fields.get('data')!
-                statement.fields.set('data', new n.FuncCall('jsonb_pretty', data))
-            }
-
             if (statement.fields.size === 0) {
                 json.convertToEmptyDataStatement(statement)
+            } else {
+                if (options?.prettifyJson) {
+                    const data = statement.fields.get('data')!
+                    statement.fields.set('data', new n.FuncCall('jsonb_pretty', data))
+                }
             }
 
             const formatter = createFormatter()
