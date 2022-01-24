@@ -378,6 +378,9 @@ export class Subquery {
 
 export class DerivedTable {
     constructor(public select: SelectStatement, public alias: string) { }
+    ref() {
+        return new TableRef(this.alias)
+    }
     toSql(ctx: NodeToSqlContext) {
         ctx.formatter.write('(')
         ctx.formatter.break()

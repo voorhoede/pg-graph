@@ -38,7 +38,8 @@ export function createNestedTabularSource(options: TabularSourceOptions, relType
                     ctx,
                     subStatement,
                     [...through].reverse(),
-                    targetTable
+                    targetTable,
+                    foreignKey
                 )
 
                 groupByField = joinHelpers.getOneHasOneColumnRef(lastThroughTableRef!, parentTable.ref, lastThroughItem!.foreignKey)
@@ -51,14 +52,14 @@ export function createNestedTabularSource(options: TabularSourceOptions, relType
                 countCondition.toSql(subStatement, targetTable.name)
             }
 
-            const derivedTable = new n.DerivedTable(subStatement, targetTable.name)
+            const derivedTable = new n.DerivedTable(subStatement, targetTable.name + '_through')
 
             statement.joins.push(new n.Join(
                 countCondition?.requiresAtLeast(1) ? JoinType.INNER_JOIN : JoinType.LEFT_JOIN,
                 derivedTable,
                 joinHelpers.createComparison(
                     RelationType.Many,
-                    targetTable,
+                    derivedTable.ref(),
                     parentTable,
                     json.createHiddenFieldName('group'),
                 )

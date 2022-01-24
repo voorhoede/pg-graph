@@ -3,12 +3,16 @@ import { RelationType } from "../types";
 
 export function createComparison(type: RelationType, ownTable: n.TableRef, otherTable: n.TableRef, foreignKey?: string) {
     if (type === RelationType.Many) {
+        //console.log(ownTable, 'belongs to', otherTable, 'through ', foreignKey)
+
         return new n.Compare(
-            getOneBelongsToManyColumnRef(ownTable, otherTable, foreignKey),
+            getOneBelongsToColumnRef(ownTable, otherTable, foreignKey),
             '=',
             getOwnColumnRef(otherTable),
         )
     } else {
+        //console.log(ownTable, 'has one', otherTable, 'through ', foreignKey)
+
         return new n.Compare(
             getOneHasOneColumnRef(otherTable, ownTable, foreignKey),
             '=',
@@ -29,7 +33,7 @@ export function createComparison(type: RelationType, ownTable: n.TableRef, other
  * @param foreignKey 
  * @returns 
  */
-export function getOneBelongsToManyColumnRef(oneTable: n.TableRef, manyTable: n.TableRef, foreignKey?: string) {
+export function getOneBelongsToColumnRef(oneTable: n.TableRef, manyTable: n.TableRef, foreignKey?: string) {
     return new n.Column(getForeignKey(foreignKey, name(manyTable)), oneTable.name)
 }
 

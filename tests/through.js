@@ -8,7 +8,7 @@ async function connect() {
     return client
 }
 
-test.only('should be able to get all comments belonging to the blogs of user "Remco"', async (t) => {
+test('should be able to get all comments belonging to the blogs of user "Remco"', async (t) => {
     const client = await connect()
 
     const query = graphQuery()
@@ -18,7 +18,7 @@ test.only('should be able to get all comments belonging to the blogs of user "Re
 
         user
             .throughMany('blog', 'posted_by')
-            .many('comment', 'bloggy_id', q => {
+            .many('comment', q => {
                 q.field('message')
             })
 
@@ -68,6 +68,43 @@ test('should be able to get the blog belonging to the comments posted by user "R
     /*
         Does not really make sense in relation to the data because both comments have the blog
     */
+    t.deepEqual(row.data, {
+        user: [ 
+            {
+                name: 'Remco',
+                blog: {
+                    name: 'Blog about cats'
+                }
+            },
+        ]
+    })
+
+    await client.end()
+
+    t.end()
+})
+
+test.only('should be able to get comments posted on blogs belonging to user "Remco"', async (t) => {
+    const client = await connect()
+
+    const query = graphQuery()
+
+    query.source('blog', blog => {
+        blog.field('name')
+
+        blog
+            .throughOne('user', 'posted_by')
+            .many('comment', q => {
+                q.field('message')
+            })
+
+        //blog.where('name', '=', 'Remco')
+    })
+
+    console.log(query.toSql())
+
+    const row = await client.query(query.toSql(), query.values()).then(result => result.rows[0])
+
     t.deepEqual(row.data, {
         user: [ 
             {

@@ -63,8 +63,7 @@ export function createThroughChain({ buildContext, initialThrough, addTabularSou
     }
 }
 
-
-export function applyThroughItemsToStatement(ctx: GraphToSqlContext, statement: n.SelectStatement, items: ThroughCollection, targetTableRef: n.TableRef): [n.TableRefWithAlias | undefined, ThroughItem | undefined] {
+export function applyThroughItemsToStatement(ctx: GraphToSqlContext, statement: n.SelectStatement, items: ThroughCollection, targetTableRef: n.TableRef, targetForeignKey?: string): [n.TableRefWithAlias | undefined, ThroughItem | undefined] {
     let prevThroughItem: ThroughItem | undefined;
     let prevThroughTableRef: n.TableRefWithAlias | undefined;
 
@@ -84,17 +83,14 @@ export function applyThroughItemsToStatement(ctx: GraphToSqlContext, statement: 
                 )
             ))
         } else if (throughItem.rel === RelationType.Many) {
-            // comment.blog_id
-            // blog.id
-
             statement.joins.push(new n.Join(
                 JoinType.INNER_JOIN,
                 throughTableRef,
                 joinHelpers.createComparison(
                     throughItem.rel,
-                    prevThroughTableRef ?? targetTableRef, /// 
-                    throughTableRef, //... points to many other...
-                    prevThroughItem?.foreignKey,
+                    prevThroughTableRef ?? targetTableRef,
+                    throughTableRef,
+                    prevThroughItem?.foreignKey ?? targetForeignKey,
                 )
             ))
         } else {
