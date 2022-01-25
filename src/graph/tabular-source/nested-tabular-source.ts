@@ -31,7 +31,14 @@ export function createNestedTabularSource(options: TabularSourceOptions, relType
 
             json.convertDataFieldsToAgg(subStatement)
 
-            let groupByField = joinHelpers.getOneHasOneColumnRef(subStatement.source, parentTable.ref, foreignKey)
+            const derivedTable = new n.DerivedTable(subStatement, targetTable.name + '_through')
+
+            let groupByField = joinHelpers.getPointsToColumnRef(subStatement.source, parentTable.ref, foreignKey)
+            let joinComparison = joinHelpers.createPointsToComparison(
+                derivedTable.ref(),
+                parentTable,
+                json.createHiddenFieldName('group'),
+            )
 
             if (through?.length) {
                 const [lastThroughTableRef, lastThroughItem] = applyThroughItemsToStatement(
@@ -42,7 +49,17 @@ export function createNestedTabularSource(options: TabularSourceOptions, relType
                     foreignKey
                 )
 
-                groupByField = joinHelpers.getOneHasOneColumnRef(lastThroughTableRef!, parentTable.ref, lastThroughItem!.foreignKey)
+                if (lastThroughItem?.rel === RelationType.Many) {
+                    groupByField = joinHelpers.getPointsToColumnRef(lastThroughTableRef!, parentTable.ref, lastThroughItem!.foreignKey)
+                } else {
+                    groupByField = joinHelpers.getOwnColumnRef(lastThroughTableRef!)
+
+                    joinComparison = new n.Compare(
+                        joinHelpers.getPointsToColumnRef(parentTable, lastThroughTableRef!, lastThroughItem?.foreignKey),
+                        '=',
+                        derivedTable.ref().column(json.createHiddenFieldName('group')),
+                    )
+                }
             }
 
             subStatement.fields.set(json.createHiddenFieldName('group'), groupByField)
@@ -52,17 +69,10 @@ export function createNestedTabularSource(options: TabularSourceOptions, relType
                 countCondition.toSql(subStatement, targetTable.name)
             }
 
-            const derivedTable = new n.DerivedTable(subStatement, targetTable.name + '_through')
-
             statement.joins.push(new n.Join(
                 countCondition?.requiresAtLeast(1) ? JoinType.INNER_JOIN : JoinType.LEFT_JOIN,
                 derivedTable,
-                joinHelpers.createComparison(
-                    RelationType.Many,
-                    derivedTable.ref(),
-                    parentTable,
-                    json.createHiddenFieldName('group'),
-                )
+                joinComparison
             ))
 
             json.addReferencesToChildFields({
@@ -85,14 +95,23 @@ export function createNestedTabularSource(options: TabularSourceOptions, relType
 
                 const sourceTableAlias = ctx.genTableAlias(source.tableName)
                 subStatement.source = new n.TableRefWithAlias(new n.TableRef(source.tableName), sourceTableAlias)
-                subStatement.addWhereClause(
-                    joinHelpers.createComparison(
-                        source.rel,
-                        subStatement.source,
-                        parentTable,
-                        source.foreignKey
+                if (source.rel === RelationType.Many) {
+                    subStatement.addWhereClause(
+                        joinHelpers.createPointsToComparison(
+                            subStatement.source,
+                            parentTable,
+                            source.foreignKey
+                        )
                     )
-                )
+                } else {
+                    subStatement.addWhereClause(
+                        joinHelpers.createPointsToComparison(
+                            parentTable,
+                            subStatement.source,
+                            source.foreignKey
+                        )
+                    )
+                }
                 subStatement.limit = 1
 
                 const [lastThroughTableRef,] = applyThroughItemsToStatement(
@@ -105,10 +124,9 @@ export function createNestedTabularSource(options: TabularSourceOptions, relType
                 subStatement.joins.push(new n.Join(
                     JoinType.INNER_JOIN,
                     targetTable,
-                    joinHelpers.createComparison(
-                        RelationType.One,
-                        targetTable,
+                    joinHelpers.createPointsToComparison(
                         lastThroughTableRef ?? subStatement.source,
+                        targetTable,
                         foreignKey,
                     )
                 ))
@@ -128,10 +146,9 @@ export function createNestedTabularSource(options: TabularSourceOptions, relType
                 statement.joins.push(new n.Join(
                     JoinType.LEFT_JOIN,
                     targetTable,
-                    joinHelpers.createComparison(
-                        RelationType.One,
-                        targetTable,
+                    joinHelpers.createPointsToComparison(
                         parentTable,
+                        targetTable,
                         foreignKey,
                     )
                 ))

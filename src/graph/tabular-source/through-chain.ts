@@ -75,8 +75,7 @@ export function applyThroughItemsToStatement(ctx: GraphToSqlContext, statement: 
             statement.joins.push(new n.Join(
                 JoinType.INNER_JOIN,
                 throughTableRef,
-                joinHelpers.createComparison(
-                    throughItem.rel,
+                joinHelpers.createPointsToComparison(
                     throughTableRef,
                     prevThroughTableRef ?? targetTableRef,
                     throughItem.foreignKey,
@@ -86,8 +85,7 @@ export function applyThroughItemsToStatement(ctx: GraphToSqlContext, statement: 
             statement.joins.push(new n.Join(
                 JoinType.INNER_JOIN,
                 throughTableRef,
-                joinHelpers.createComparison(
-                    throughItem.rel,
+                joinHelpers.createPointsToComparison(
                     prevThroughTableRef ?? targetTableRef,
                     throughTableRef,
                     prevThroughItem?.foreignKey ?? targetForeignKey,

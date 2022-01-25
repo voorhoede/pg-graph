@@ -1,12 +1,12 @@
 import { n } from "../../sql-ast";
 import { RelationType } from "../types";
 
-export function createComparison(type: RelationType, ownTable: n.TableRef, otherTable: n.TableRef, foreignKey?: string) {
-    if (type === RelationType.Many) {
+export function createComparison(ownTable: n.TableRef, type: 'belongsTo' | 'hasOne', otherTable: n.TableRef, foreignKey?: string) {
+    if (type === 'belongsTo') {
         //console.log(ownTable, 'belongs to', otherTable, 'through ', foreignKey)
 
         return new n.Compare(
-            getOneBelongsToColumnRef(ownTable, otherTable, foreignKey),
+            getPointsToColumnRef(ownTable, otherTable, foreignKey),
             '=',
             getOwnColumnRef(otherTable),
         )
@@ -14,11 +14,20 @@ export function createComparison(type: RelationType, ownTable: n.TableRef, other
         //console.log(ownTable, 'has one', otherTable, 'through ', foreignKey)
 
         return new n.Compare(
-            getOneHasOneColumnRef(otherTable, ownTable, foreignKey),
+            getPointsToColumnRef(ownTable, otherTable, foreignKey),
             '=',
-            getOwnColumnRef(ownTable),
+            getOwnColumnRef(otherTable),
         )
     }
+}
+
+export function createPointsToComparison(ownTable: n.TableRef, otherTable: n.TableRef, foreignKey?: string) {
+    //console.log(ownTable.name, 'points to', otherTable.name, 'through ', foreignKey)
+    return new n.Compare(
+        getPointsToColumnRef(ownTable, otherTable, foreignKey),
+        '=',
+        getOwnColumnRef(otherTable),
+    )
 }
 
 /**
@@ -28,33 +37,15 @@ export function createComparison(type: RelationType, ownTable: n.TableRef, other
  * 
  * Foreign key is on comment
  * 
- * @param oneTable 
- * @param manyTable 
+ * @param firstTable 
+ * @param pointsTo 
  * @param foreignKey 
  * @returns 
  */
-export function getOneBelongsToColumnRef(oneTable: n.TableRef, manyTable: n.TableRef, foreignKey?: string) {
-    return new n.Column(getForeignKey(foreignKey, name(manyTable)), oneTable.name)
+export function getPointsToColumnRef(firstTable: n.TableRef, pointsTo: n.TableRef, foreignKey?: string) {
+    return new n.Column(getForeignKey(foreignKey, name(pointsTo)), firstTable.name)
 }
 
-/**
- * Foreign table has key that points to own table. For example:
- * User has one gift
- * 
- * User is own table
- * Gift is other table
- * 
- * Result:
- * user.gift_id
- * 
- * @param ownTable 
- * @param otherTable 
- * @param foreignKey 
- * @returns 
- */
-export function getOneHasOneColumnRef(ownTable: n.TableRef, otherTable: n.TableRef, foreignKey?: string) {
-    return new n.Column(getForeignKey(foreignKey, name(otherTable)), ownTable.name)
-}
 
 export function getOwnColumnRef(table: n.TableRef) {
     return new n.Column('id', table.name)
