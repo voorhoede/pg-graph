@@ -63,41 +63,8 @@ export function createThroughChain({ buildContext, initialThrough, addTabularSou
     }
 }
 
-export function applyThroughItemsToStatement(ctx: GraphToSqlContext, statement: n.SelectStatement, items: ThroughCollection, targetTableRef: n.TableRef, targetForeignKey?: string): [n.TableRefWithAlias | undefined, ThroughItem | undefined] {
-    let prevThroughItem: ThroughItem | undefined;
-    let prevThroughTableRef: n.TableRefWithAlias | undefined;
-
-    for (let throughItem of items) {
-        const throughTableAlias = ctx.genTableAlias(throughItem.tableName)
-        const throughTableRef = new n.TableRefWithAlias(new n.TableRef(throughItem.tableName), throughTableAlias)
-
-        if (throughItem.rel === RelationType.One) {
-            statement.joins.push(new n.Join(
-                JoinType.INNER_JOIN,
-                throughTableRef,
-                joinHelpers.createPointsToComparison(
-                    throughTableRef,
-                    prevThroughTableRef ?? targetTableRef,
-                    throughItem.foreignKey,
-                )
-            ))
-        } else if (throughItem.rel === RelationType.Many) {
-            statement.joins.push(new n.Join(
-                JoinType.INNER_JOIN,
-                throughTableRef,
-                joinHelpers.createPointsToComparison(
-                    prevThroughTableRef ?? targetTableRef,
-                    throughTableRef,
-                    prevThroughItem?.foreignKey ?? targetForeignKey,
-                )
-            ))
-        } else {
-            exhaustiveCheck(throughItem.rel)
-        }
-
-        prevThroughTableRef = throughTableRef
-        prevThroughItem = throughItem
-    }
-
-    return [prevThroughTableRef, prevThroughItem]
+type Target = {
+    tableRef: n.TableRef,
+    foreignKey?: string,
+    rel: RelationType,
 }

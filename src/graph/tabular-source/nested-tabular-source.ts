@@ -1,7 +1,7 @@
 import { n, json, JoinType } from "../../sql-ast"
 import { RelationType } from "../types"
 import { createBaseTabularSource } from "./base-tabular-source"
-import { applyThroughItemsToStatement, ThroughCollection } from "./through-chain"
+import { ThroughCollection, ThroughItem } from "./through-chain"
 import { TabularSourceOptions } from "./types"
 import { exhaustiveCheck } from "../../utils"
 import * as joinHelpers from './join-helpers'
@@ -41,13 +41,39 @@ export function createNestedTabularSource(options: TabularSourceOptions, relType
             )
 
             if (through?.length) {
-                const [lastThroughTableRef, lastThroughItem] = applyThroughItemsToStatement(
-                    ctx,
-                    subStatement,
-                    [...through].reverse(),
-                    targetTable,
-                    foreignKey
-                )
+                let lastThroughItem: ThroughItem | undefined;
+                let lastThroughTableRef: n.TableRefWithAlias | undefined;
+
+                for (let throughItem of [...through].reverse()) {
+                    const throughTableRef = new n.TableRefWithAlias(new n.TableRef(throughItem.tableName), ctx.genTableAlias(throughItem.tableName))
+                    const prevRel = lastThroughItem?.rel ?? RelationType.Many;
+                    let comparison: n.Compare;
+
+                    if (prevRel === RelationType.One) {
+                        comparison = joinHelpers.createPointsToComparison(
+                            throughTableRef,
+                            lastThroughTableRef ?? subStatement.source,
+                            throughItem.foreignKey,
+                        )
+                    } else if (prevRel === RelationType.Many) {
+                        comparison = joinHelpers.createPointsToComparison(
+                            lastThroughTableRef ?? subStatement.source,
+                            throughTableRef,
+                            lastThroughItem?.foreignKey ?? foreignKey,
+                        )
+                    } else {
+                        exhaustiveCheck(prevRel)
+                    }
+
+                    subStatement.joins.push(new n.Join(
+                        JoinType.INNER_JOIN,
+                        throughTableRef,
+                        comparison,
+                    ))
+
+                    lastThroughTableRef = throughTableRef
+                    lastThroughItem = throughItem
+                }
 
                 if (lastThroughItem?.rel === RelationType.Many) {
                     groupByField = joinHelpers.getPointsToColumnRef(lastThroughTableRef!, parentTable.ref, lastThroughItem!.foreignKey)
@@ -114,12 +140,38 @@ export function createNestedTabularSource(options: TabularSourceOptions, relType
                 }
                 subStatement.limit = 1
 
-                const [lastThroughTableRef,] = applyThroughItemsToStatement(
-                    ctx,
-                    subStatement,
-                    remainingThroughItems,
-                    subStatement.source
-                )
+                let lastThroughItem: ThroughItem | undefined;
+                let lastThroughTableRef: n.TableRefWithAlias | undefined;
+
+                for (let throughItem of remainingThroughItems) {
+                    const throughTableRef = new n.TableRefWithAlias(new n.TableRef(throughItem.tableName), ctx.genTableAlias(throughItem.tableName))
+                    let comparison: n.Compare;
+
+                    if (throughItem.rel === RelationType.One) {
+                        comparison = joinHelpers.createPointsToComparison(
+                            lastThroughTableRef ?? subStatement.source,
+                            throughTableRef,
+                            throughItem.foreignKey,
+                        )
+                    } else if (throughItem.rel === RelationType.Many) {
+                        comparison = joinHelpers.createPointsToComparison(
+                            throughTableRef,
+                            lastThroughTableRef ?? subStatement.source,
+                            lastThroughItem?.foreignKey ?? foreignKey,
+                        )
+                    } else {
+                        exhaustiveCheck(throughItem.rel)
+                    }
+
+                    subStatement.joins.push(new n.Join(
+                        JoinType.INNER_JOIN,
+                        throughTableRef,
+                        comparison,
+                    ))
+
+                    lastThroughTableRef = throughTableRef
+                    lastThroughItem = throughItem
+                }
 
                 subStatement.joins.push(new n.Join(
                     JoinType.INNER_JOIN,
