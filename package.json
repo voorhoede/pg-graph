@@ -8,6 +8,7 @@
     "pretest": "npm run build && docker-compose -f ./tests/setup/docker-compose.yml up -d && node ./tests/setup/seed.js",
     "test": "tape ./tests/*.js | colortape",
     "posttest": "cd ./tests/setup && docker-compose down && echo 'done'",
+    "prebuild": "rm -rf dist",
     "build": "tsc",
     "prepublish": "tsc",
     "start": "npx ts-node src/index.ts"
