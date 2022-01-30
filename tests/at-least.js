@@ -8,6 +8,33 @@ async function connect() {
     return client
 }
 
+test('returns at least 2 comments for user "Remco"', async (t) => {
+    const client = await connect()
+
+    const query = graphQuery()
+
+    query.source('comment', comment => {
+        comment.field('message')
+
+        comment.atLeast(2)
+
+        comment.one('user', 'posted_by', user => {
+            user.atLeast(1)
+            user.where('name', '=', 'Remco')
+        })
+    })
+
+    const row = await client.query(query.toSql(), query.values()).then(result => result.rows[0])
+
+    t.deepEqual(row.data, 
+        { comment: [ { message: 'Amazing blog!' }, { message: 'I agree with this blog' } ] }    
+    )
+
+    await client.end()
+
+    t.end()
+})
+
 test('does not return anything when we request at least 3 comments for user "Remco"', async (t) => {
     const client = await connect()
 

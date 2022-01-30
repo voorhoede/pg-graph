@@ -25,8 +25,6 @@ test('should be able to get all comments belonging to the blogs of user "Remco"'
         user.where('name', '=', 'Remco')
     })
 
-    console.log(query.toSql())
-
     const row = await client.query(query.toSql(), query.values()).then(result => result.rows[0])
 
     t.deepEqual(row.data, {
