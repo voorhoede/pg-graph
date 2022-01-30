@@ -381,6 +381,9 @@ export class DerivedTable {
     ref() {
         return new TableRef(this.alias)
     }
+    column(name: string) {
+        return new Column(name, this.alias)
+    }
     toSql(ctx: NodeToSqlContext) {
         ctx.formatter.write('(')
         ctx.formatter.break()

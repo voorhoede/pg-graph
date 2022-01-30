@@ -1,28 +1,6 @@
 import { n } from "../../sql-ast";
-import { RelationType } from "../types";
-
-export function createComparison(ownTable: n.TableRef, type: 'belongsTo' | 'hasOne', otherTable: n.TableRef, foreignKey?: string) {
-    if (type === 'belongsTo') {
-        //console.log(ownTable, 'belongs to', otherTable, 'through ', foreignKey)
-
-        return new n.Compare(
-            getPointsToColumnRef(ownTable, otherTable, foreignKey),
-            '=',
-            getOwnColumnRef(otherTable),
-        )
-    } else {
-        //console.log(ownTable, 'has one', otherTable, 'through ', foreignKey)
-
-        return new n.Compare(
-            getPointsToColumnRef(ownTable, otherTable, foreignKey),
-            '=',
-            getOwnColumnRef(otherTable),
-        )
-    }
-}
 
 export function createPointsToComparison(ownTable: n.TableRef, otherTable: n.TableRef, foreignKey?: string) {
-    //console.log(ownTable.name, 'points to', otherTable.name, 'through ', foreignKey)
     return new n.Compare(
         getPointsToColumnRef(ownTable, otherTable, foreignKey),
         '=',
