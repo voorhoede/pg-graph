@@ -8,6 +8,7 @@
         "module": "CommonJS"
     },
     "files": [
-        "src/index.ts"
+        "src/index.ts",
+        "src/plugins/builtin/index.ts"
     ]
 }

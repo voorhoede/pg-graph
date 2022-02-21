@@ -1,6 +1,7 @@
+import { GraphBuildContext } from '../../graph/context'
 import { Item, TabularSource } from '../../graph/tabular-source/types'
 import { toSqlKey } from '../../graph/types'
-import { json, n } from '../../sql-ast'
+import { JoinType, json, n, OrderDirection } from '../../sql-ast'
 import { Plugin, PluginType } from '../utils'
 
 /**
@@ -22,7 +23,7 @@ const defaultPaginationOptions: OffsetLimitPaginationOptions = {
 
 const groupName = 'pagination'
 
-function parseUint(value: any, fallback: number) {
+function parseUint(value: any, fallback: number): number {
     const num = value * 1
     if (Number.isNaN(num)) {
         return fallback
@@ -30,37 +31,71 @@ function parseUint(value: any, fallback: number) {
     return num >= 1 ? value : fallback
 }
 
-function createPaginationItem(options: OffsetLimitPaginationOptions): Item {
+function createPaginationItem(buildContext: GraphBuildContext, options: OffsetLimitPaginationOptions): Item {
     return {
         type: 'paginationItem',
-        [toSqlKey](statement, ctx) {
+        order: 1,
+        [toSqlKey](statement, _ctx) {
             const pageSize = parseUint(options.pageSize, defaultPaginationOptions.pageSize)
             const page = parseUint(options.page, defaultPaginationOptions.page)
 
-            statement.limit = pageSize
-            statement.offset = page * pageSize
+            const originalSourceRef = statement.source as n.TableRef
 
-            const subCount = new n.SelectStatement()
-            subCount.source = ctx.table
+            // Create a cte which defines a constant table with a valid page and pageSize.
+            // Currently that only means that the page and pageSize is at least 1
+            const constantsStatement = new n.SelectStatement()
+            constantsStatement.fields.set('page', new n.FuncCall('greatest', new n.RawValue(1), buildContext.createPlaceholderForValue(page)))
+            constantsStatement.fields.set('pageSize', new n.FuncCall('greatest', new n.RawValue(1), buildContext.createPlaceholderForValue(pageSize)))
+            const constantsCte = new n.Cte('constants', constantsStatement)
+            statement.ctes.set(constantsCte.name, constantsCte)
 
-            subCount.fields.set('pageCount',
-                new n.FuncCall('ceil',
-                    new n.Operator(
-                        new n.AggCall('count', [new n.All()]),
-                        '/',
-                        new n.Cast(new n.RawValue(pageSize), 'float')
-                    )
+            // we replace the original source by the constant cte...
+            statement.source = constantsCte.ref()
+
+            // ...and cross join it with the select from the original source
+            // now every row in the result will have the pageSize and page
+            // we use a cross join lateral so that we can reference the pageSize and page from the constants table
+            const selectWithLimit = new n.SelectStatement()
+            selectWithLimit.source = originalSourceRef
+            selectWithLimit.fields.set(Symbol(), new n.All())
+            selectWithLimit.fields.set('rowCount', new n.WindowFunc(new n.AggCall('count', [new n.All()])))
+            selectWithLimit.limit = constantsCte.column('pageSize')
+            selectWithLimit.offset = new n.Operator(
+                new n.Group(new n.Operator(constantsCte.column('page'), '-', new n.RawValue(1))),
+                '*',
+                constantsCte.column('pageSize'),
+            );
+
+            // we move the ordering to the sub select. Pagination without ordering does not really make sense in a sql database so make sure to warn the user about that
+            if (statement.orderByColumns.length === 0) {
+                console.warn('(OffsetLimitPagination) No order was specified. This is needed for correct pagination therefore we will add "id" as the order by column')
+                selectWithLimit.orderByColumns.push(new n.OrderByColumn(new n.Column('id'), OrderDirection.DESC))
+            } else {
+                statement.copyOrderBysTo(selectWithLimit)
+                statement.orderByColumns.length = 0
+            }
+
+            // we move the where clause to the sub select. It's very important that the rowCount / pageSize is based on user provided filters
+            statement.copyWhereClauseTo(selectWithLimit)
+            statement.clearWhereClause()
+
+            const derivedSelectWithLimit = new n.DerivedTable(selectWithLimit, originalSourceRef.name)
+
+            statement.joins.push(new n.Join(JoinType.CROSS_JOIN_LATERAL, derivedSelectWithLimit))
+
+            // group by is needed because we need to access page and pageSize while aggregrating all other values
+            statement.groupBys.push(constantsCte.column('page'), constantsCte.column('pageSize'), derivedSelectWithLimit.column('rowCount'))
+
+            json.addField(statement, groupName, 'pageCount', new n.FuncCall('ceil',
+                new n.Operator(
+                    derivedSelectWithLimit.column('rowCount'),
+                    '/',
+                    new n.Cast(constantsCte.column('pageSize'), 'float') // cast to float is needed to prevent pg from rounding down
                 )
-            )
-
-            const subQuery = new n.Subquery(
-                subCount
-            )
-
-            json.addField(statement, groupName, 'pageCount', subQuery)
-            json.addField(statement, groupName, 'rowCount', new n.AggCall('count', [new n.All()]))
-            json.addField(statement, groupName, 'page', new n.Cast(new n.RawValue(page), 'int'))
-            json.addField(statement, groupName, 'pageSize', new n.Cast(new n.RawValue(pageSize), 'float'))
+            ))
+            json.addField(statement, groupName, 'rowCount', derivedSelectWithLimit.column('rowCount'))
+            json.addField(statement, groupName, 'page', constantsCte.column('page'))
+            json.addField(statement, groupName, 'pageSize', constantsCte.column('pageSize'))
         }
     }
 }
@@ -77,7 +112,7 @@ export function offsetLimitPagination(): Plugin {
         mount(ctx) {
             return {
                 pagination(this: TabularSource, options: OffsetLimitPaginationOptions = defaultPaginationOptions) {
-                    ctx.addItem(createPaginationItem(options))
+                    ctx.addItem(createPaginationItem(ctx.buildContext, options))
                     return this
                 }
             }

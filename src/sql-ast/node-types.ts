@@ -31,7 +31,8 @@ export type SqlNode =
     n.Case |
     n.CompositeType |
     n.Cast |
-    n.Having
+    n.Having |
+    n.Values
 
 export function isSqlNode(n: any): n is SqlNode {
     return n.type && n.toSql

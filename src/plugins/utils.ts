@@ -27,6 +27,9 @@ export function mountPluginFor<T extends PluginType>(type: T, ctx: GetContextByP
 }
 
 export function installPlugin(plugin: Plugin) {
+    if (!isPlugin(plugin)) {
+        throw new Error(`Invalid plugin provided. Got a ${typeof plugin} but expected a plugin instance`)
+    }
     plugins[plugin.type].push(plugin)
 }
 
@@ -35,6 +38,9 @@ export type PluginBase<T extends PluginType, C> = {
     mount(ctx: PluginContext<C>): object,
 }
 
+function isPlugin(maybePlugin: any): maybePlugin is Plugin {
+    return typeof maybePlugin.type !== 'undefined'
+}
 
 /* 
     the object that gets passed to the plugin on creation

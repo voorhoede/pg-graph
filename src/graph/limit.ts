@@ -1,3 +1,4 @@
+import { n } from "../sql-ast";
 import { GraphItemTypes, ToSql, toSqlKey } from "./types";
 
 export type Limit = {
@@ -8,7 +9,7 @@ export function createLimit(count: number): Limit {
     return {
         type: GraphItemTypes.LIMIT,
         [toSqlKey](statement) {
-            statement.limit = count
+            statement.limit = new n.RawValue(count)
         }
     }
 }

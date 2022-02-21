@@ -1,8 +1,8 @@
 import { n } from "../sql-ast";
-import { jsTypeToPgType } from "../utils";
+import { pgTypeForJsValue } from "../utils";
 
 export type GraphBuildContext = {
-    createPlaceholderForValue(value: any): n.Cast | n.Placeholder
+    createPlaceholderForValue(value: any, explicitType?: string): n.Cast | n.Placeholder
     get values(): readonly any[]
 }
 
@@ -10,7 +10,7 @@ export function createGraphBuildContext(): GraphBuildContext {
     let placeholderValues: any[] = [];
 
     return {
-        createPlaceholderForValue(value: any): n.Cast | n.Placeholder {
+        createPlaceholderForValue(value, explicitType): n.Cast | n.Placeholder {
             let i = placeholderValues.indexOf(value)
             if (i > -1) {
                 i += 1
@@ -19,7 +19,7 @@ export function createGraphBuildContext(): GraphBuildContext {
                 i = placeholderValues.length
             }
 
-            const type = jsTypeToPgType(value)
+            const type = explicitType ?? pgTypeForJsValue(value)
 
             return type ? new n.Cast(new n.Placeholder(i), type) : new n.Placeholder(i)
         },

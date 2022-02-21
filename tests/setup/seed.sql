@@ -16,7 +16,14 @@ CREATE TABLE IF NOT EXISTS comment (
     posted_by INTEGER REFERENCES "user"(id)
 );
 
+CREATE TABLE IF NOT EXISTS visits (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES "user"(id),
+    last_visit TIMESTAMPTZ
+);
+
 BEGIN;
+DELETE FROM "visits";
 DELETE FROM comment;
 DELETE FROM blog;
 DELETE FROM "user";
@@ -33,5 +40,11 @@ INSERT INTO blog (name, posted_by) VALUES ('Blog about computers', currval('user
 INSERT INTO comment (blog_id, message, posted_by) VALUES (currval('blog_id_seq'), 'Amazing blog!', currval('user_id_seq'));
 INSERT INTO comment (blog_id, message, posted_by) VALUES (currval('blog_id_seq'), 'I agree with this blog', currval('user_id_seq'));
 INSERT INTO comment (blog_id, message, posted_by) VALUES (currval('blog_id_seq'), 'Very nerdy, i agree', currval('user_id_seq'));
+
+INSERT INTO visits (id, user_id, last_visit) SELECT d.x as id, user_id, NOW() as last_visit FROM generate_series(0, 1000) as d(x)
+	CROSS JOIN LATERAL (
+		SELECT id as user_id FROM "user" WHERE 1000 <> d.x ORDER BY random() LIMIT 1
+	) b
+    ON CONFLICT (id) DO NOTHING;
 
 COMMIT;

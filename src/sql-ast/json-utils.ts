@@ -58,13 +58,17 @@ export function convertDataFieldsToAgg(statement: n.SelectStatement, nullField?:
             const subSelect = new n.SelectStatement();
             subSelect.fields.set(Symbol(), new n.All())
             subSelect.limit = statement.limit
+            subSelect.offset = statement.offset
             subSelect.source = statement.source.ref;
             statement.copyOrderBysTo(subSelect)
             statement.copyWhereClauseTo(subSelect)
+            statement.copyJoinsTo(subSelect)
 
             statement.orderByColumns.length = 0
             statement.clearWhereClause()
             statement.limit = undefined
+            statement.offset = undefined
+            statement.joins = []
             statement.source = new n.DerivedTable(
                 subSelect,
                 statement.source.name
@@ -119,10 +123,10 @@ type SpecialFieldReferencesOptions = {
 export function addReferencesToChildFields({ src, dest, withPrefix }: SpecialFieldReferencesOptions) {
     let fromSelect: n.SelectStatement
     let target: string
-    if (src instanceof n.DerivedTable) {
+    if (src instanceof n.DerivedTable && src.select instanceof n.SelectStatement) {
         target = src.alias
         fromSelect = src.select
-    } else if (src instanceof n.Cte) {
+    } else if (src instanceof n.Cte && src.node instanceof n.SelectStatement) {
         target = src.name
         fromSelect = src.node
     } else {
@@ -132,7 +136,7 @@ export function addReferencesToChildFields({ src, dest, withPrefix }: SpecialFie
     for (let [alias,] of fromSelect.fields) {
         if (typeof alias === 'string' && !isHiddenFieldName(alias)) {
             if (alias === BuiltinGroups.Data) {
-                addField(dest, BuiltinGroups.Data, withPrefix, new n.Column(alias, target))
+                addField(dest, BuiltinGroups.Data, withPrefix, new n.FuncCall('coalesce', new n.Column(alias, target), new n.RawValue('[]')))
             } else {
                 addField(dest, BuiltinGroups.Data, withPrefix + capitalizeFirst(alias), new n.Column(alias, target))
             }

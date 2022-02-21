@@ -5,7 +5,7 @@ import { NodeToSqlContext } from './context'
 
 
 export class Operator {
-    constructor(public left: FuncCall | AggCall | RawValue | Column | Subquery | Operator | Cast, public operator: string, public right: FuncCall | AggCall | RawValue | Column | Subquery | Operator | Cast) { }
+    constructor(public left: FuncCall | AggCall | RawValue | Column | Subquery | Operator | Cast | Group, public operator: string, public right: FuncCall | AggCall | RawValue | Column | Subquery | Operator | Cast | Group) { }
     public toSql(ctx: NodeToSqlContext) {
         this.left.toSql(ctx)
         ctx.formatter.write(' ' + this.operator + ' ')
@@ -41,11 +41,23 @@ export class WindowFunc {
 }
 
 export class Cte {
-    constructor(public name: string, public node: SelectStatement) { }
+    constructor(public name: string, public node: SelectStatement | Values, public notMaterialized?: boolean) { }
+    ref() {
+        return new TableRef(this.name)
+    }
+    column(name: string) {
+        return new Column(name, this.name)
+    }
     toSql(ctx: NodeToSqlContext) {
         ctx.formatter
             .startIndent()
-            .writeLine(`"${this.name}" AS (`)
+            .writeLine(`"${this.name}" AS`)
+
+        if (this.notMaterialized) {
+            ctx.formatter.write(' NOT MATERIALIZED')
+        }
+
+        ctx.formatter.write(' (')
 
         this.node.toSql(ctx)
 
@@ -246,21 +258,12 @@ export class OrderBy {
         this.columns = columns
     }
     toSql(ctx: NodeToSqlContext) {
-        const hasCommonDir =
-            this.columns.every(col => col.mode === OrderDirection.ASC) ||
-            this.columns.every(col => col.mode === OrderDirection.DESC)
-
         ctx.formatter
             .write('ORDER BY ')
             .startIndent()
             .break()
             .join(this.columns, col => col.toSql(ctx), ', ')
-
-        if (hasCommonDir && this.columns.length && this.columns[0].mode !== 'ASC') {
-            ctx.formatter.write(' ' + this.columns[0].mode)
-        }
-
-        ctx.formatter.endIndent()
+            .endIndent()
     }
 }
 
@@ -334,9 +337,8 @@ export class TableRefWithAlias extends TableRef {
 export class All {
     constructor(public table?: string) { }
     toSql(ctx: NodeToSqlContext) {
-        const resolvedTable = this.table ?? ctx.table
-        if (resolvedTable) {
-            new TableRef(resolvedTable).toSql(ctx)
+        if (this.table) {
+            new TableRef(this.table).toSql(ctx)
             ctx.formatter.write('.*')
         } else {
             ctx.formatter.write('*')
@@ -377,7 +379,7 @@ export class Subquery {
 }
 
 export class DerivedTable {
-    constructor(public select: SelectStatement, public alias: string) { }
+    constructor(public select: SelectStatement | Values, public alias: string) { }
     ref() {
         return new TableRef(this.alias)
     }
@@ -471,6 +473,22 @@ export class Case {
 
 }
 
+export class Values {
+    constructor(public rows: [RawValue[]]) { }
+    toSql(ctx: NodeToSqlContext) {
+        ctx.formatter.startIndent()
+        ctx.formatter.write('VALUES ')
+        ctx.formatter.join(this.rows, row => {
+            ctx.formatter.write('(')
+            ctx.formatter.join(row, (item) => {
+                item.toSql(ctx)
+            }, ', ')
+            ctx.formatter.write(')')
+        }, ', ')
+        ctx.formatter.endIndent()
+    }
+}
+
 export class Cast {
     constructor(public node: FuncCall | AggCall | Column | RawValue | Group | Placeholder | Cast, public castTo: string) { }
     toSql(ctx: NodeToSqlContext) {
@@ -491,7 +509,6 @@ export class Having {
 }
 
 export type SelectField = Column | Subquery | FuncCall | AggCall | WindowFunc | RawValue | Placeholder | Group | Operator | All
-
 export class SelectStatement {
     public fields = new Map<string | Symbol, SelectField>()
     public ctes = new Map<string, Cte>()
@@ -499,8 +516,8 @@ export class SelectStatement {
     public groupBys: Column[] = [];
     public orderByColumns: OrderByColumn[] = []
     public source?: TableRefWithAlias | TableRef | DerivedTable;
-    public limit?: number;
-    public offset?: number;
+    public limit?: Column | FuncCall | Cast | RawValue | Group | Subquery | Operator
+    public offset?: Column | FuncCall | Cast | RawValue | Group | Subquery | Operator;
     public having?: Compare;
     private whereClauseChain?: WhereBuilderResultNode;
 
@@ -620,7 +637,7 @@ export class SelectStatement {
             ctx.formatter.writeLine('LIMIT')
             ctx.formatter.startIndent()
             ctx.formatter.break()
-            ctx.formatter.write(this.limit.toString())
+            this.limit.toSql(subCtx)
             ctx.formatter.endIndent()
         }
 
@@ -628,7 +645,7 @@ export class SelectStatement {
             ctx.formatter.writeLine('OFFSET')
             ctx.formatter.startIndent()
             ctx.formatter.break()
-            ctx.formatter.write(this.offset.toString())
+            this.offset.toSql(subCtx)
             ctx.formatter.endIndent()
         }
 

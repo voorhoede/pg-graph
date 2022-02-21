@@ -4,7 +4,7 @@ export function exhaustiveCheck(param: never): never {
 }
 
 
-export function jsTypeToPgType(value: any) {
+export function pgTypeForJsValue(value: any) {
     switch (typeof value) {
         case 'string':
             return 'text'

@@ -1,5 +1,5 @@
 import { createGraphBuildContext, createGraphToSqlContext, GraphBuildContext } from "./context";
-import { json, n } from "../sql-ast";
+import { JoinType, json, n } from "../sql-ast";
 import { toSqlKey } from "./types";
 import { createFormatter } from "../sql-ast/formatting";
 import { createNodeToSqlContext } from "../sql-ast/context";
@@ -31,6 +31,20 @@ export function graphQuery() {
             sources.forEach(source => {
                 source[toSqlKey](statement, graphToSqlCtx)
             })
+
+            // this hacky thing is needed because we want to make sure that we always have at least one row (even with nulls).
+            // Otherwise no response is returned from the db
+            statement.joins.push(
+                new n.Join(JoinType.RIGHT_JOIN,
+                    new n.DerivedTable(
+                        new n.Values([
+                            [new n.RawValue(1)]
+                        ])
+                        , '_'
+                    ),
+                    n.Identifier.true
+                )
+            )
 
             if (statement.fields.size === 0) {
                 json.convertToEmptyDataStatement(statement)

@@ -1,7 +1,7 @@
 import { GraphBuildContext } from '../../graph/context'
 import { Item, TabularSource } from '../../graph/tabular-source/types'
 import { toSqlKey } from '../../graph/types'
-import { n, OrderDirection } from '../../sql-ast'
+import { JoinType, n, OrderDirection } from '../../sql-ast'
 import { Plugin, PluginType } from '../utils'
 
 type KeysetPaginationOptions = {
@@ -19,23 +19,52 @@ function createPaginationItem(ctx: GraphBuildContext, options: KeysetPaginationO
         const [oldOrderByColumn] = statement.orderByColumns
             .filter(orderCol => orderCol.column instanceof n.Column)
 
-        const columns = [new n.Column('id')]
+        let columns = [new n.Column('id')]
         if (oldOrderByColumn) {
-            columns.unshift(oldOrderByColumn.column as n.Column)
+            if (oldOrderByColumn.column instanceof n.Column && oldOrderByColumn.column.name !== 'id') { // fix the issue where the user already added the id column as a order by column
+                columns.unshift(new n.Column(oldOrderByColumn.column.name))
+            }
         }
 
         return columns
     }
 
-    function createPagePlusOneQuery(statement: n.SelectStatement, decodedCursor?: any) {
-        const selectPagePlusOne = new n.SelectStatement()
-        selectPagePlusOne.source = statement.source
-        selectPagePlusOne.fields.set(Symbol(), new n.All())
+    function createConstantsQuery(statement: n.SelectStatement) {
+        const constantsStatement = new n.SelectStatement()
+        constantsStatement.fields.set('pageSize', new n.FuncCall('greatest', new n.RawValue(1), ctx.createPlaceholderForValue(options.pageSize)))
+        const constantsCte = new n.Cte('pagination_constants', constantsStatement)
+        statement.ctes.set(constantsCte.name, constantsCte)
+        return constantsCte.ref()
+    }
 
-        // get the row count through a window function
-        selectPagePlusOne.fields.set('rowCount',
-            new n.WindowFunc(new n.AggCall('count', [new n.All()]))
-        )
+    function createFilteredQuery(statement: n.SelectStatement) {
+        if (statement.hasWhereClause()) {
+            const filterSelect = new n.SelectStatement()
+            filterSelect.source = statement.source
+            filterSelect.fields.set(Symbol(), new n.All())
+            statement.copyWhereClauseTo(filterSelect)
+
+            const cteFiltered = new n.Cte('pagination_filtered', filterSelect, true)
+            statement.ctes.set(cteFiltered.name, cteFiltered)
+            statement.clearWhereClause()
+
+            return cteFiltered.ref()
+        }
+        else {
+            return statement.source as n.TableRef
+        }
+    }
+
+    /**
+     * Create a query to get the results for the current page + 1 extra item. We use the one extra item to determine if there is another page.
+     * @param statement 
+     * @param decodedCursor 
+     * @returns 
+     */
+    function createPagePlusOneQuery(statement: n.SelectStatement, filteredRef: n.TableRef, constantsRef: n.TableRef, decodedCursor?: any) {
+        const subSelect = new n.SelectStatement()
+        subSelect.source = filteredRef
+        subSelect.fields.set(Symbol(), new n.All())
 
         const columns = getOrderByColumns(statement)
 
@@ -43,11 +72,12 @@ function createPaginationItem(ctx: GraphBuildContext, options: KeysetPaginationO
         const orderByComposite = new n.CompositeType(...columns)
         const orderDirection = statement.orderByColumns[0]?.mode
 
-        // we request the page + 1 extra. The extra row is used to determine if there is one additional page after the requested one
-        selectPagePlusOne.limit = options.pageSize + 1
-        selectPagePlusOne.orderByColumns = [
+        subSelect.orderByColumns = [
             new n.OrderByColumn(orderByComposite, orderDirection)
         ]
+
+        // we request the page + 1 extra. The extra row is used to determine if there is one additional page after the requested one
+        subSelect.limit = new n.Operator(constantsRef.column('pageSize'), '+', new n.RawValue(1))
 
         // if we have a decodedCursor then add it as a where clause
         if (decodedCursor) {
@@ -55,7 +85,7 @@ function createPaginationItem(ctx: GraphBuildContext, options: KeysetPaginationO
 
             const operator = orderDirection === OrderDirection.DESC ? '<' : '>='
 
-            selectPagePlusOne.addWhereClause(
+            subSelect.addWhereClause(
                 new n.Compare(
                     orderByComposite,
                     operator,
@@ -64,64 +94,69 @@ function createPaginationItem(ctx: GraphBuildContext, options: KeysetPaginationO
             )
         }
 
-        const ctePagePlusOne = new n.Cte(
-            'pagination_page_plus_one',
-            selectPagePlusOne
+        const selectPagePlusOne = new n.SelectStatement()
+        selectPagePlusOne.source = constantsRef
+        selectPagePlusOne.fields.set(Symbol(), new n.All())
+        selectPagePlusOne.fields.set('rowNumber',
+            new n.WindowFunc(new n.AggCall('row_number', []))
         )
+        selectPagePlusOne.joins.push(new n.Join(JoinType.CROSS_JOIN_LATERAL, new n.DerivedTable(subSelect, 'a')))
 
-        // remove the order by columns as they are included in a different query
-        statement.orderByColumns = []
+        const ctePagePlusOne = new n.Cte('pagination_page_plus_one', selectPagePlusOne)
         statement.ctes.set(ctePagePlusOne.name, ctePagePlusOne)
 
-        return new n.TableRef(ctePagePlusOne.name)
+        // remove the order by columns as they are now included in a different query
+        statement.orderByColumns = []
+
+        return ctePagePlusOne.ref()
     }
 
-    function createMetadataQuery(statement: n.SelectStatement, ctePagePlusOneRef: n.TableRef) {
+    function createNextCursorQuery(statement: n.SelectStatement, ctePagePlusOneRef: n.TableRef) {
         const columns = getOrderByColumns(statement)
 
-        const selectMetaData = new n.SelectStatement()
-        selectMetaData.fields.set(Symbol(),
-            new n.FuncCall('jsonb_build_object',
-                new n.RawValue('next'), new n.FuncCall('encode',
-                    new n.Cast(
-                        new n.Cast(
-                            new n.FuncCall('jsonb_build_object',
-                                ...columns.map(col => {
-                                    return [
-                                        new n.RawValue(col.name),
-                                        new n.Column(col.name)
-                                    ]
-                                }).flat()
-                            ),
-                            'text'
-                        ),
-                        'bytea'
+        // encode the next cursor by creating a json object containing all order by columns and their values and encoding that json object into a base64 string
+        const nextCursor = new n.FuncCall('encode',
+            new n.Cast(
+                new n.Cast(
+                    new n.FuncCall('jsonb_build_object',
+                        ...columns.map(col => {
+                            return [
+                                new n.RawValue(col.name),
+                                new n.Column(col.name)
+                            ]
+                        }).flat()
                     ),
-                    new n.RawValue('base64')
+                    'text'
                 ),
-                new n.RawValue('prev'), options.cursor ? ctx.createPlaceholderForValue(options.cursor) : n.Identifier.null,
-                new n.RawValue('rowCount'), new n.Column('rowCount'),
-            )
+                'bytea'
+            ),
+            new n.RawValue('base64')
         )
-        selectMetaData.source = ctePagePlusOneRef
-        selectMetaData.offset = 1
-        selectMetaData.limit = 1
 
-        statement.fields.set('pagination', new n.Subquery(selectMetaData))
+        const selectNextCursor = new n.SelectStatement()
+        selectNextCursor.source = ctePagePlusOneRef
+        selectNextCursor.fields.set('nextCursor', nextCursor)
+        selectNextCursor.addWhereClause(
+            new n.Compare(new n.Column('rowNumber'), '=', new n.Operator(new n.Column('pageSize'), '+', new n.RawValue(1)))
+        )
 
-        return selectMetaData
+        const cteNextCursor = new n.Cte(
+            'pagination_next_cursor',
+            selectNextCursor
+        )
+
+        statement.ctes.set(cteNextCursor.name, cteNextCursor)
+
+        return cteNextCursor.ref()
     }
 
-    function createFinalPageResultsQuery(statement: n.SelectStatement, ctePagePlusOneRef: n.TableRef) {
+    function createFinalPageResultsQuery(ctePagePlusOneRef: n.TableRef) {
         const selectExactPageSize = new n.SelectStatement()
-        selectExactPageSize.limit = options.pageSize
         selectExactPageSize.source = ctePagePlusOneRef
-        selectExactPageSize.fields.set(Symbol(), new n.All())
+        selectExactPageSize.addWhereClause(new n.Compare(new n.Column('rowNumber'), '<=', new n.Column('pageSize')))
+        selectExactPageSize.fields.set(Symbol(), new n.All());
 
-        statement.source = new n.DerivedTable(
-            selectExactPageSize,
-            (statement.source as n.TableRef).name
-        )
+        return selectExactPageSize
     }
 
     return {
@@ -129,9 +164,32 @@ function createPaginationItem(ctx: GraphBuildContext, options: KeysetPaginationO
         order: 1,
         [toSqlKey](statement, _ctx) {
             const decodedCursor = options.cursor ? getDecodedCursor(options.cursor) : undefined
-            const ctePagePlusOneRef = createPagePlusOneQuery(statement, decodedCursor)
-            createMetadataQuery(statement, ctePagePlusOneRef)
-            createFinalPageResultsQuery(statement, ctePagePlusOneRef)
+            const constantsRef = createConstantsQuery(statement)
+            const filteredRef = createFilteredQuery(statement)
+            const pagePlusOneRef = createPagePlusOneQuery(statement, filteredRef, constantsRef, decodedCursor)
+            const nextCursorRef = createNextCursorQuery(statement, pagePlusOneRef)
+            const exactSizeQuery = createFinalPageResultsQuery(pagePlusOneRef)
+
+            const oldSourceName = (statement.source as n.TableRef).name
+            const exactSizeDerivedTable = new n.DerivedTable(exactSizeQuery, oldSourceName)
+
+            statement.source = exactSizeDerivedTable
+
+            const selectNextCursor = new n.SelectStatement()
+            selectNextCursor.fields.set(Symbol(), nextCursorRef.column('nextCursor'))
+            selectNextCursor.source = nextCursorRef
+
+            const selectRowCount = new n.SelectStatement()
+            selectRowCount.fields.set(Symbol(), new n.AggCall('count', [new n.All()]))
+            selectRowCount.source = filteredRef
+
+            statement.fields.set('pagination',
+                new n.FuncCall('jsonb_build_object',
+                    new n.RawValue('next'), new n.Subquery(selectNextCursor),
+                    new n.RawValue('prev'), ctx.createPlaceholderForValue(options.cursor, 'text'),
+                    new n.RawValue('rowCount'), new n.Subquery(selectRowCount),
+                )
+            )
         }
     }
 }

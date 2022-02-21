@@ -119,7 +119,7 @@ export function createNestedTabularSource(options: TabularSourceOptions, relType
 
                 const sourceTableAlias = ctx.genTableAlias(source.tableName)
                 subStatement.source = new n.TableRefWithAlias(new n.TableRef(source.tableName), sourceTableAlias)
-                subStatement.limit = 1
+                subStatement.limit = new n.RawValue(1)
 
                 const [firstCol, secondCol] = source.rel === RelationType.Many ? [subStatement.source, parentTable] : [parentTable, subStatement.source]
                 subStatement.addWhereClause(

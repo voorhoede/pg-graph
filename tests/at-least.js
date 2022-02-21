@@ -51,9 +51,9 @@ test('does not return anything when we request at least 3 comments for user "Rem
         })
     })
 
-    const row = await client.query(query.toSql(), query.values()).then(result => result.rows[0])
+    const row = await client.query(query.toSql(), query.values()).then(result => result.rows[0].data)
 
-    t.deepEqual(row, undefined)
+    t.deepEqual(row.comment, [])
 
     await client.end()
 
