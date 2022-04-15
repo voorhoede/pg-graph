@@ -53,25 +53,3 @@ console.log(row.data)
 ```
 
 Note that your data is ready to be returned from you api. No need to loop through all rows and convert it to json.
-
-## Ideas
-
-## Pagination
-
-"As a user I want efficient pagination"
-
-Offer a solution for limit/offset and keyset pagination as separate modules
-
-```
-import { graphQuery, installPlugin } from 'pg-graph
-
-installPlugin(pagination())
-
-const query = graphQuery()
-
-query.source('blog', blog => {
-    blog.many('comment', comments => {
-        comments.paginated({ offset: 50, limit: 30 })
-    })
-})
-```
