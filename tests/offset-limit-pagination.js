@@ -62,8 +62,6 @@ test('second page returns correct pagination', async (t) => {
 
     const row = await client.query(query.toSql(), query.values()).then(result => result.rows[0])
 
-    console.log(row.data.visitsPagination.pageCount)
-
     t.equal(row.data.visits[0].id, 20)
     t.equal(row.data.visits.length, 20)
     t.equal(row.data.visitsPagination.pageCount, Math.ceil(1000 / 20))

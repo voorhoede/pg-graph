@@ -2,9 +2,7 @@ import { JoinType, n } from "../../sql-ast"
 import { GraphBuildContext, GraphToSqlContext } from "../context"
 import { RelationType } from "../types"
 import { Item, TabularChain, TabularSource, TabularSourceBuilder } from "./types"
-import * as joinHelpers from './join-helpers'
 import { createNestedTabularSource } from "./nested-tabular-source"
-import { exhaustiveCheck } from "../../utils"
 
 export type ThroughItem = {
     tableName: string,
@@ -61,10 +59,4 @@ export function createThroughChain({ buildContext, initialThrough, addTabularSou
             return item
         }
     }
-}
-
-type Target = {
-    tableRef: n.TableRef,
-    foreignKey?: string,
-    rel: RelationType,
 }
