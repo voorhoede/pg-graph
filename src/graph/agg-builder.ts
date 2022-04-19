@@ -3,12 +3,12 @@ import { n, json, SqlNode } from "../sql-ast";
 import { BuiltinGroups } from "../sql-ast/json-utils";
 import { createWhereBuilder, WhereBuilder } from "./where-builder";
 
-export type AggBuilder = {
-    count(options?: AggOptionsWithOptionalColumn): AggBuilder,
-    sum(options: AggOptions): AggBuilder,
-    avg(options: AggOptions): AggBuilder,
-    min(options: AggOptions): AggBuilder,
-    max(options: AggOptions): AggBuilder,
+export type AggBuilder<Fields> = {
+    count(options?: AggOptionsWithOptionalColumn<Fields>): AggBuilder<Fields>,
+    sum(options: AggOptions<Fields>): AggBuilder<Fields>,
+    avg(options: AggOptions<Fields>): AggBuilder<Fields>,
+    min(options: AggOptions<Fields>): AggBuilder<Fields>,
+    max(options: AggOptions<Fields>): AggBuilder<Fields>,
 };
 
 export type AggBuilderResult = {
@@ -16,16 +16,16 @@ export type AggBuilderResult = {
     addToStatement(statement: n.SelectStatement): void
 }
 
-export type AggOptions = {
+export type AggOptions<Fields> = {
     column: string,
     alias?: string,
     distinct?: boolean,
-    filter?: (builder: WhereBuilder) => void,
+    filter?: (builder: WhereBuilder<Fields>) => void,
 }
 
-export type AggOptionsWithOptionalColumn = Partial<AggOptions> & Omit<AggOptions, 'column'>
+export type AggOptionsWithOptionalColumn<Fields> = Partial<AggOptions<Fields>> & Omit<AggOptions<Fields>, 'column'>
 
-export function createAggBuilder(ctx: GraphBuildContext): { builder: AggBuilder, result: AggBuilderResult } {
+export function createAggBuilder<Fields>(ctx: GraphBuildContext): { builder: AggBuilder<Fields>, result: AggBuilderResult } {
     const aggs: Array<(statement: n.SelectStatement) => void> = [];
     let tableContext: n.TableRef
 
@@ -35,11 +35,11 @@ export function createAggBuilder(ctx: GraphBuildContext): { builder: AggBuilder,
         arg: SqlNode,
         alias?: string,
         distinct?: boolean,
-        filter?: (builder: WhereBuilder) => void
+        filter?: (builder: WhereBuilder<Fields>) => void
     }
 
     function addAggCallField({ statement, funcName, arg, alias, distinct, filter }: AvgCallFieldOptions) {
-        const { builder, result } = createWhereBuilder(ctx)
+        const { builder, result } = createWhereBuilder<Fields>(ctx)
 
         if (filter) {
             builder(filter)
@@ -58,7 +58,7 @@ export function createAggBuilder(ctx: GraphBuildContext): { builder: AggBuilder,
     }
 
     function createSimpleAggMethod(name: string) {
-        return function (this: AggBuilder, options: AggOptions) {
+        return function (this: AggBuilder<Fields>, options: AggOptions<Fields>) {
             aggs.push((statement) => {
                 addAggCallField({
                     statement,
@@ -75,7 +75,7 @@ export function createAggBuilder(ctx: GraphBuildContext): { builder: AggBuilder,
 
     return {
         builder: {
-            count(options: AggOptionsWithOptionalColumn = {}) {
+            count(options: AggOptionsWithOptionalColumn<Fields> = {}) {
                 aggs.push((statement) => {
                     addAggCallField({
                         statement,

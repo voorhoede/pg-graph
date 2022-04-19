@@ -3,8 +3,9 @@ import { JoinType, json, n } from "../../sql-ast";
 import { createBaseTabularSource } from "./base-tabular-source";
 import { TabularSourceOptions } from "./types";
 import { itemsToSql } from "./items-to-sql";
+import { TableLike } from "../../type-utils";
 
-export function createRootTabularSource(options: TabularSourceOptions) {
+export function createRootTabularSource<T extends TableLike>(options: TabularSourceOptions<T>) {
     return createBaseTabularSource(options, ({ targetTableName, statement, ctx, items, name, countCondition }) => {
         const targetTable = new n.TableRefWithAlias(new n.TableRef(targetTableName), ctx.genTableAlias(targetTableName))
 

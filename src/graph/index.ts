@@ -5,18 +5,19 @@ import { createFormatter } from "../sql-ast/formatting";
 import { createNodeToSqlContext } from "../sql-ast/context";
 import { TabularSource, TabularSourceBuilder } from './tabular-source/types'
 import { createRootTabularSource } from './tabular-source/root-tabular-source'
+import type { TableForTableName, TableLike, TableName } from '../type-utils'
 
 export type GraphQueryToSqlOptions = {
     prettifyJson?: boolean
 }
 
-export function graphQuery() {
-    const sources: TabularSource[] = [];
+export function graphQuery<T extends TableLike>() {
+    const sources: TabularSource<any>[] = [];
     const graphBuildContext: GraphBuildContext = createGraphBuildContext()
 
     return {
-        source(name: string, builder: TabularSourceBuilder) {
-            const item = createRootTabularSource({
+        source<SourceName extends TableName<T>, SourceTable extends TableLike = TableForTableName<T, SourceName>>(name: SourceName, builder: TabularSourceBuilder<SourceTable>) {
+            const item = createRootTabularSource<SourceTable>({
                 buildContext: graphBuildContext,
                 name,
                 builder

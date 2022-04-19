@@ -12,6 +12,10 @@ export function createHiddenFieldName(fieldName: string) {
     return '_' + fieldName
 }
 
+/**
+ * Clear the select statement so that the output will be an empty json array
+ * @param statement 
+ */
 export function convertToEmptyDataStatement(statement: n.SelectStatement) {
     statement.fields.clear()
     statement.fields.set('data', new n.Cast(new n.RawValue('[]'), 'json'))
@@ -22,6 +26,13 @@ export function convertToEmptyDataStatement(statement: n.SelectStatement) {
     statement.joins.length = 0
 }
 
+/**
+ * Copy json fields from one statement to another
+ * @param from 
+ * @param to 
+ * @param group 
+ * @param jsonProp 
+ */
 export function copyFieldsInto(from: n.SelectStatement, to: n.SelectStatement, group: string, jsonProp: string) {
     const srcData = from.fields.get('data')
     if (srcData) {
@@ -29,6 +40,13 @@ export function copyFieldsInto(from: n.SelectStatement, to: n.SelectStatement, g
     }
 }
 
+/**
+ * Add a single json field to the given object in the given statement
+ * @param statement where the json field is added
+ * @param group the name of the object
+ * @param jsonProp the key within the object
+ * @param field the data
+ */
 export function addField(statement: n.SelectStatement, group: string, jsonProp: string, field: SelectField) {
     let dataField: n.FuncCall = statement.fields.get(group) as n.FuncCall
     if (!dataField) {
@@ -38,6 +56,13 @@ export function addField(statement: n.SelectStatement, group: string, jsonProp: 
     dataField.args.push(new n.RawValue(jsonProp), field)
 }
 
+/**
+ * Convert the field with the name 'data' into a json aggregration. 
+ * This will modify the select statement so that the aggregration returns the correct data
+ * @param statement 
+ * @param nullField 
+ * @returns 
+ */
 export function convertDataFieldsToAgg(statement: n.SelectStatement, nullField?: n.Column) {
     let dataField = statement.fields.get(BuiltinGroups.Data)
     if (!dataField) {

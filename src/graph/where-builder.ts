@@ -1,19 +1,20 @@
 
 import { ValidComparisonSign, n } from "../sql-ast"
 import { isSqlNode, SqlNode } from "../sql-ast/node-types"
+import { TableFieldNames } from "../type-utils"
 import { GraphBuildContext } from "./context"
 
 export type LogicalOperator = 'and' | 'or'
 
-export interface WhereBuilderChain {
-    and(handler: (b: WhereBuilder) => void): WhereBuilderChain,
-    and(name: string, comparison: ValidComparisonSign, value: unknown): WhereBuilderChain,
-    or(handler: (b: WhereBuilder) => void): WhereBuilderChain,
-    or(name: string, comparison: ValidComparisonSign, value: unknown): WhereBuilderChain,
+export interface WhereBuilderChain<Fields> {
+    and(handler: (b: WhereBuilder<Fields>) => void): WhereBuilderChain<Fields>,
+    and<N extends TableFieldNames<Fields>>(name: N, comparison: ValidComparisonSign, value: Fields[N]): WhereBuilderChain<Fields>,
+    or(handler: (b: WhereBuilder<Fields>) => void): this,
+    or<N extends TableFieldNames<Fields>>(name: N, comparison: ValidComparisonSign, value: Fields[N]): WhereBuilderChain<Fields>,
 }
 
 export type WhereBuilderResultNode = n.Compare | n.And | n.Or | n.Group | undefined
-export type WhereBuilder = (nameOrBuilderHandler: ((b: WhereBuilder) => void) | string, comparison?: ValidComparisonSign, value?: unknown) => WhereBuilderChain
+export type WhereBuilder<Fields, N extends TableFieldNames<Fields> = TableFieldNames<Fields>> = (nameOrBuilderHandler: ((b: WhereBuilder<Fields>) => void) | N, comparison?: ValidComparisonSign, value?: Fields[N]) => WhereBuilderChain<Fields>
 export type WhereBuilderResult = {
     setTableContext(ref: n.TableRef): void
     get node(): WhereBuilderResultNode
@@ -24,14 +25,14 @@ export type WhereBuilderResult = {
  * @param ctx 
  * @returns 
  */
-export function createWhereBuilder(ctx: GraphBuildContext) {
+export function createWhereBuilder<Fields>(ctx: GraphBuildContext) {
 
     const fields: n.Column[] = []
 
-    function createBuilderGroup(groupOp: LogicalOperator): { builder: WhereBuilder, result: WhereBuilderResult } {
+    function createBuilderGroup(groupOp: LogicalOperator): { builder: WhereBuilder<Fields>, result: WhereBuilderResult } {
         let resultNode: WhereBuilderResultNode = undefined
 
-        const chain: WhereBuilderChain = {
+        const chain: WhereBuilderChain<Fields> = {
             and: createOperatorMethod('and'),
             or: createOperatorMethod('or')
         }
@@ -43,11 +44,11 @@ export function createWhereBuilder(ctx: GraphBuildContext) {
             return ctx.createPlaceholderForValue(value)
         }
 
-        function createOperatorMethod(operator: LogicalOperator) {
-            return function (nameOrBuilderHandler: ((b: WhereBuilder) => void) | string, comparison?: ValidComparisonSign, value?: unknown): WhereBuilderChain {
+        function createOperatorMethod(operator: LogicalOperator): WhereBuilder<Fields> {
+            return function (nameOrBuilderHandler, comparison?, value?): WhereBuilderChain<Fields> {
                 if (typeof nameOrBuilderHandler === 'string') { // name, comparison, value
                     addOperator(operator, nameOrBuilderHandler, comparison!, value)
-                } else { // subbuilder
+                } else if(typeof nameOrBuilderHandler === 'function') { // subbuilder
                     addGroup(operator, nameOrBuilderHandler)
                 }
                 return chain
@@ -80,7 +81,7 @@ export function createWhereBuilder(ctx: GraphBuildContext) {
             }
         }
 
-        function addGroup(op: LogicalOperator, builderHandler: (b: WhereBuilder) => void) {
+        function addGroup(op: LogicalOperator, builderHandler: (b: WhereBuilder<Fields>) => void) {
             const { builder, result } = createBuilderGroup(op)
             builderHandler(builder)
             if (result.node) {
@@ -95,8 +96,8 @@ export function createWhereBuilder(ctx: GraphBuildContext) {
         }
 
         return {
-            builder(nameOrBuilderHandler: ((b: WhereBuilder) => void) | string, comparison?: ValidComparisonSign, value?: unknown) {
-                return (chain[groupOp] as WhereBuilder)(nameOrBuilderHandler, comparison, value)
+            builder(nameOrBuilderHandler, comparison?, value?) {
+                return (chain[groupOp] as WhereBuilder<Fields>)(nameOrBuilderHandler, comparison, value)
             },
             result: {
                 setTableContext(ref) {

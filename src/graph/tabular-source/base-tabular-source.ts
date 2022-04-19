@@ -10,12 +10,13 @@ import { createWhereBuilder, WhereBuilder } from "../where-builder"
 import { createWhereClause } from "../where-clause"
 
 import * as plugins from '../../plugins'
-import { Item, TabularSource, TabularSourceBuilder, TabularSourceOptions, TabularSourceToSqlOptions } from "./types"
+import { Item, TabularSource, TabularSourceBuilder, TabularSourceOptions, TabularSourcePlugins, TabularSourceToSqlOptions } from "./types"
 import { createThroughChain, ThroughItem } from "./through-chain"
 import { CountCondition, createCountCondition } from "./count-condition"
 import { createNestedTabularSource } from "./nested-tabular-source"
+import { TableFieldNames, TableFields, TableLike } from "../../type-utils"
 
-export function createBaseTabularSource({ buildContext, name, builder }: TabularSourceOptions, toSql: (options: TabularSourceToSqlOptions) => void) {
+export function createBaseTabularSource<T extends TableLike>({ buildContext, name, builder }: TabularSourceOptions<T>, toSql: (options: TabularSourceToSqlOptions) => void) {
     const items: Item[] = []
 
     let alias: string
@@ -23,27 +24,29 @@ export function createBaseTabularSource({ buildContext, name, builder }: Tabular
 
     const addItem = (item: Item) => items.push(item)
 
-    const instance: TabularSource = {
+    type Fields = TableFields<T>
+
+    const instance: TabularSource<T> = {
         type: GraphItemTypes.TABLE,
 
-        limit(count: number) {
+        limit(count) {
             addItem(createLimit(count))
             return this
         },
 
-        atLeast(count: number) {
+        atLeast(count) {
             countCondition = createCountCondition(buildContext, '>=', count)
             return this
         },
 
-        agg(builderHandler: (builder: AggBuilder) => void) {
-            const { builder, result } = createAggBuilder(buildContext)
+        agg(builderHandler: (builder: AggBuilder<Fields>) => void) {
+            const { builder, result } = createAggBuilder<Fields>(buildContext)
             builderHandler(builder)
             addItem(createAgg(result))
             return this
         },
 
-        throughMany(table: string, foreignKey?: string) {
+        throughMany(table, foreignKey?) {
             const initialThrough: ThroughItem = {
                 tableName: table,
                 foreignKey,
@@ -53,7 +56,7 @@ export function createBaseTabularSource({ buildContext, name, builder }: Tabular
             return createThroughChain({ buildContext, initialThrough, addTabularSourceItem: addItem })
         },
 
-        throughOne(table: string, foreignKey?: string) {
+        throughOne(table, foreignKey?) {
             const initialThrough: ThroughItem = {
                 tableName: table,
                 foreignKey,
@@ -62,8 +65,8 @@ export function createBaseTabularSource({ buildContext, name, builder }: Tabular
             return createThroughChain({ buildContext, initialThrough, addTabularSourceItem: addItem })
         },
 
-        many(name: string, foreignKeyOrFn: TabularSourceBuilder | string, builder?: TabularSourceBuilder): TabularSource {
-            let item: TabularSource;
+        many(name: string, foreignKeyOrFn: TabularSourceBuilder<T> | string, builder?: TabularSourceBuilder<T>): TabularSource<T> {
+            let item: TabularSource<T>;
             if (typeof foreignKeyOrFn === 'function') {
                 item = createNestedTabularSource({ buildContext, name, builder: foreignKeyOrFn }, RelationType.Many);
             } else {
@@ -73,8 +76,8 @@ export function createBaseTabularSource({ buildContext, name, builder }: Tabular
             return item
         },
 
-        one(name: string, foreignKeyOrFn: TabularSourceBuilder | string, builder?: TabularSourceBuilder): TabularSource {
-            let item: TabularSource;
+        one(name: string, foreignKeyOrFn: TabularSourceBuilder<T> | string, builder?: TabularSourceBuilder<T>): TabularSource<T> {
+            let item: TabularSource<T>;
             if (typeof foreignKeyOrFn === 'function') {
                 item = createNestedTabularSource({ buildContext, name, builder: foreignKeyOrFn }, RelationType.One);
             } else {
@@ -84,8 +87,8 @@ export function createBaseTabularSource({ buildContext, name, builder }: Tabular
             return item
         },
 
-        where(nameOrBuilderHandler: ((builder: WhereBuilder) => void) | string, sign?: ValidComparisonSign, value?: any) {
-            const { builder, result } = createWhereBuilder(buildContext)
+        where<N extends TableFieldNames<Fields>>(nameOrBuilderHandler: N | ((builder: WhereBuilder<Fields>) => void), sign?: ValidComparisonSign, value?: Fields[N]) {
+            const { builder, result } = createWhereBuilder<Fields>(buildContext)
             if (typeof nameOrBuilderHandler === 'function') {
                 nameOrBuilderHandler(builder)
             } else {
@@ -135,7 +138,7 @@ export function createBaseTabularSource({ buildContext, name, builder }: Tabular
         }
     }
 
-    builder?.(instance as any)
+    builder?.(instance as (TabularSource<T> & TabularSourcePlugins))
 
     return instance
 }
