@@ -7,14 +7,16 @@ import { GraphBuildContext } from "./context"
 export type LogicalOperator = 'and' | 'or'
 
 export interface WhereBuilderChain<Fields> {
-    and(handler: (b: WhereBuilder<Fields>) => void): WhereBuilderChain<Fields>,
-    and<N extends TableFieldNames<Fields>>(name: N, comparison: ValidComparisonSign, value: Fields[N]): WhereBuilderChain<Fields>,
-    or(handler: (b: WhereBuilder<Fields>) => void): this,
-    or<N extends TableFieldNames<Fields>>(name: N, comparison: ValidComparisonSign, value: Fields[N]): WhereBuilderChain<Fields>,
+    and: WhereBuilder<Fields>,
+    or: WhereBuilder<Fields>
 }
 
 export type WhereBuilderResultNode = n.Compare | n.And | n.Or | n.Group | undefined
-export type WhereBuilder<Fields, N extends TableFieldNames<Fields> = TableFieldNames<Fields>> = (nameOrBuilderHandler: ((b: WhereBuilder<Fields>) => void) | N, comparison?: ValidComparisonSign, value?: Fields[N]) => WhereBuilderChain<Fields>
+
+export type WhereBuilder<Fields, N extends TableFieldNames<Fields> = TableFieldNames<Fields>> = {
+    (name: N, comparison: ValidComparisonSign, value: Fields[N]): WhereBuilderChain<Fields>,
+    (handler: (b: WhereBuilder<Fields>) => void): WhereBuilderChain<Fields>,
+}
 export type WhereBuilderResult = {
     setTableContext(ref: n.TableRef): void
     get node(): WhereBuilderResultNode
@@ -45,7 +47,7 @@ export function createWhereBuilder<Fields>(ctx: GraphBuildContext) {
         }
 
         function createOperatorMethod(operator: LogicalOperator): WhereBuilder<Fields> {
-            return function (nameOrBuilderHandler, comparison?, value?): WhereBuilderChain<Fields> {
+            return function (nameOrBuilderHandler, comparison?: ValidComparisonSign, value?): WhereBuilderChain<Fields> {
                 if (typeof nameOrBuilderHandler === 'string') { // name, comparison, value
                     addOperator(operator, nameOrBuilderHandler, comparison!, value)
                 } else if(typeof nameOrBuilderHandler === 'function') { // subbuilder
@@ -96,9 +98,7 @@ export function createWhereBuilder<Fields>(ctx: GraphBuildContext) {
         }
 
         return {
-            builder(nameOrBuilderHandler, comparison?, value?) {
-                return (chain[groupOp] as WhereBuilder<Fields>)(nameOrBuilderHandler, comparison, value)
-            },
+            builder: chain[groupOp],
             result: {
                 setTableContext(ref) {
                     fields.forEach(field => {

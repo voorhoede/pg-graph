@@ -10,23 +10,26 @@ import { createWhereBuilder, WhereBuilder } from "../where-builder"
 import { createWhereClause } from "../where-clause"
 
 import * as plugins from '../../plugins'
-import { Item, TabularSource, TabularSourceBuilder, TabularSourceOptions, TabularSourcePlugins, TabularSourceToSqlOptions } from "./types"
+import { Item, TableSelection, TableSelectionFromName, TabularSource, TabularSourceBuilder, TabularSourceOptions, TabularSourcePlugins, TabularSourceToSqlOptions } from "./types"
 import { createThroughChain, ThroughItem } from "./through-chain"
 import { CountCondition, createCountCondition } from "./count-condition"
 import { createNestedTabularSource } from "./nested-tabular-source"
-import { TableFieldNames, TableFields, TableLike } from "../../type-utils"
+import { TableFieldNames, TableFields } from "../../type-utils"
 
-export function createBaseTabularSource<T extends TableLike>({ buildContext, name, builder }: TabularSourceOptions<T>, toSql: (options: TabularSourceToSqlOptions) => void) {
+export function createBaseTabularSource<S extends TableSelection>({ buildContext, name, builder }: TabularSourceOptions<S>, toSql: (options: TabularSourceToSqlOptions) => void) {
     const items: Item[] = []
 
     let alias: string
     let countCondition: CountCondition | undefined
 
-    const addItem = (item: Item) => items.push(item)
+    const addItem = <N extends Item>(item: N) => {
+        items.push(item)
+        return item
+    }
 
-    type Fields = TableFields<T>
+    type Fields = TableFields<S['curr']>
 
-    const instance: TabularSource<T> = {
+    const instance: TabularSource<S> = {
         type: GraphItemTypes.TABLE,
 
         limit(count) {
@@ -65,26 +68,20 @@ export function createBaseTabularSource<T extends TableLike>({ buildContext, nam
             return createThroughChain({ buildContext, initialThrough, addTabularSourceItem: addItem })
         },
 
-        many(name: string, foreignKeyOrFn: TabularSourceBuilder<T> | string, builder?: TabularSourceBuilder<T>): TabularSource<T> {
-            let item: TabularSource<T>;
+        many<N extends S['tableNames']>(name: N, foreignKeyOrFn: string | TabularSourceBuilder<TableSelectionFromName<S['all'], N>>, builder?: TabularSourceBuilder<TableSelectionFromName<S['all'], N>>) {
             if (typeof foreignKeyOrFn === 'function') {
-                item = createNestedTabularSource({ buildContext, name, builder: foreignKeyOrFn }, RelationType.Many);
+                return addItem( createNestedTabularSource({ buildContext, name, builder: foreignKeyOrFn }, RelationType.Many) )
             } else {
-                item = createNestedTabularSource({ buildContext, name, builder: builder! }, RelationType.Many, foreignKeyOrFn);
+                return addItem( createNestedTabularSource({ buildContext, name, builder: builder! }, RelationType.Many, foreignKeyOrFn) )
             }
-            addItem(item)
-            return item
         },
 
-        one(name: string, foreignKeyOrFn: TabularSourceBuilder<T> | string, builder?: TabularSourceBuilder<T>): TabularSource<T> {
-            let item: TabularSource<T>;
+        one<N extends S['tableNames']>(name: N, foreignKeyOrFn: string | TabularSourceBuilder<TableSelectionFromName<S['all'], N>>, builder?: TabularSourceBuilder<TableSelectionFromName<S['all'], N>>) {
             if (typeof foreignKeyOrFn === 'function') {
-                item = createNestedTabularSource({ buildContext, name, builder: foreignKeyOrFn }, RelationType.One);
+                return addItem( createNestedTabularSource({ buildContext, name, builder: foreignKeyOrFn }, RelationType.One) )
             } else {
-                item = createNestedTabularSource({ buildContext, name, builder: builder! }, RelationType.One, foreignKeyOrFn);
+                return addItem( createNestedTabularSource({ buildContext, name, builder: builder! }, RelationType.One, foreignKeyOrFn) )
             }
-            addItem(item)
-            return item
         },
 
         where<N extends TableFieldNames<Fields>>(nameOrBuilderHandler: N | ((builder: WhereBuilder<Fields>) => void), sign?: ValidComparisonSign, value?: Fields[N]) {
@@ -92,7 +89,7 @@ export function createBaseTabularSource<T extends TableLike>({ buildContext, nam
             if (typeof nameOrBuilderHandler === 'function') {
                 nameOrBuilderHandler(builder)
             } else {
-                builder(nameOrBuilderHandler, sign!, value)
+                builder(nameOrBuilderHandler, sign!, value!)
             }
             addItem(createWhereClause(result))
             return this
@@ -104,20 +101,15 @@ export function createBaseTabularSource<T extends TableLike>({ buildContext, nam
         },
 
         field(name) {
-            const fieldItem = createField(name)
-            addItem(fieldItem)
-            return fieldItem
+            return addItem( createField(name) )
         },
 
         value(jsonProp, value) {
-            const valueItem = createValue(jsonProp, value, buildContext);
-            addItem(valueItem)
-            return valueItem
+            return addItem( createValue(jsonProp, value, buildContext) )
         },
 
         orderBy(name, mode) {
-            const orderBy = createOrderBy(name, mode)
-            addItem(orderBy)
+            addItem( createOrderBy(name, mode) )
             return this
         },
 
@@ -138,7 +130,7 @@ export function createBaseTabularSource<T extends TableLike>({ buildContext, nam
         }
     }
 
-    builder?.(instance as (TabularSource<T> & TabularSourcePlugins))
+    builder?.(instance as (TabularSource<S> & TabularSourcePlugins))
 
     return instance
 }

@@ -3,7 +3,7 @@ import { JoinType, json, n } from "../sql-ast";
 import { toSqlKey } from "./types";
 import { createFormatter } from "../sql-ast/formatting";
 import { createNodeToSqlContext } from "../sql-ast/context";
-import { TabularSource, TabularSourceBuilder } from './tabular-source/types'
+import { TableSelection, TableSelectionFromName, TabularSource, TabularSourceBuilder } from './tabular-source/types'
 import { createRootTabularSource } from './tabular-source/root-tabular-source'
 import type { TableForTableName, TableLike, TableName } from '../type-utils'
 
@@ -11,13 +11,13 @@ export type GraphQueryToSqlOptions = {
     prettifyJson?: boolean
 }
 
-export function graphQuery<T extends TableLike>() {
+export function graphQuery<T extends TableLike = TableLike>() {
     const sources: TabularSource<any>[] = [];
     const graphBuildContext: GraphBuildContext = createGraphBuildContext()
 
     return {
-        source<SourceName extends TableName<T>, SourceTable extends TableLike = TableForTableName<T, SourceName>>(name: SourceName, builder: TabularSourceBuilder<SourceTable>) {
-            const item = createRootTabularSource<SourceTable>({
+        source<SourceName extends TableName<T>>(name: SourceName, builder: TabularSourceBuilder<TableSelectionFromName<T, SourceName>>) {
+            const item = createRootTabularSource({
                 buildContext: graphBuildContext,
                 name,
                 builder

@@ -1,6 +1,7 @@
+import { Tables } from "../../../types";
 import { OrderDirection, ValidComparisonSign } from "../../sql-ast";
 import { SelectStatement } from "../../sql-ast/nodes";
-import { TableFieldNames, TableFields, TableLike } from "../../type-utils";
+import { TableFieldNames, TableFields, TableForTableName, TableLike, TableName, TableNamesForRelations, TableRelationDestColumn } from "../../type-utils";
 import { AggBuilder } from "../agg-builder";
 import { GraphBuildContext, GraphToSqlContext } from "../context";
 import { Field } from "../field";
@@ -14,36 +15,45 @@ export type Item = {
     order?: number
 } & ToSql
 
-export interface TabularSource<T extends TableLike = TableLike, Fields = TableFields<T>> extends TabularChain<T>, ToSql {
+export type TableSelection<AT extends TableLike = TableLike, T extends TableLike = TableLike> = {
+    all: AT,
+    curr: T,
+    fields: TableFields<T>,
+    tableNames: TableName<AT>,
+}
+
+export type TableSelectionFromName<AT extends TableLike, Name extends TableName<AT>> = TableSelection<AT, TableForTableName<AT, Name>>
+
+export interface TabularSource<S extends TableSelection = TableSelection> extends TabularChain<S>, ToSql {
     type: GraphItemTypes.TABLE,
-    atLeast(count: number): TabularSource<T>,
-    agg(builderHandler: (builder: AggBuilder<Fields>) => void): TabularSource<T>,
-    limit(count: number): TabularSource<T>,
-    alias(name: string): TabularSource<T>,
-    where<N extends TableFieldNames<Fields>>(name: N, sign: ValidComparisonSign, value: Fields[N]): TabularSource<T>,
-    where(fn: (builder: WhereBuilder<Fields>) => void): TabularSource<T>,
-    field(name: TableFieldNames<Fields>): Field,
+    atLeast(count: number): TabularSource<S>,
+    agg(builderHandler: (builder: AggBuilder<S['fields']>) => void): TabularSource<S>,
+    limit(count: number): TabularSource<S>,
+    alias(name: string): TabularSource<S>,
+    where<N extends TableFieldNames<S['fields']>>(name: N, sign: ValidComparisonSign, value: S['fields'][N]): TabularSource<S>,
+    where(fn: (builder: WhereBuilder<S['fields']>) => void): TabularSource<S>,
+    field(name: TableFieldNames<S['fields']>): Field,
     value(jsonProp: string, value: any): Value,
-    orderBy(name: TableFieldNames<Fields>, mode?: OrderDirection): TabularSource<T>
+    orderBy(name: TableFieldNames<S['fields']>, mode?: OrderDirection): TabularSource<S>
 }
 
 export interface TabularSourcePlugins { }
 
-export interface TabularChain<T extends TableLike> {
-    many(tableOrView: string, foreignKey: string, builder: TabularSourceBuilder<T>): TabularSource<T>,
-    many(tableOrView: string, builder: TabularSourceBuilder<T>): TabularSource<T>,
-    one(tableOrView: string, foreignKey: string, builder: TabularSourceBuilder<T>): TabularSource<T>,
-    one(tableOrView: string, builder: TabularSourceBuilder<T>): TabularSource<T>,
-    throughMany(table: string, foreignKey?: string): TabularChain<T>
-    throughOne(table: string, foreignKey?: string): TabularChain<T>
+export interface TabularChain<S extends TableSelection> {
+    many<N extends TableNamesForRelations<S['curr'], 'many'>>(tableOrView: N, foreignKey: TableRelationDestColumn<S['curr'], 'many', N>, builder: TabularSourceBuilder<TableSelectionFromName<S['all'], N>>): TabularSource<TableSelectionFromName<S['all'], N>>,
+    many<N extends TableNamesForRelations<S['curr'], 'many'>>(tableOrView: N, builder: TabularSourceBuilder<TableSelectionFromName<S['all'], N>>): TabularSource<TableSelectionFromName<S['all'], N>>,
+    one<N extends TableNamesForRelations<S['curr'], 'one'>>(tableOrView: N, foreignKey: TableRelationDestColumn<S['curr'], 'one', N>, builder: TabularSourceBuilder<TableSelectionFromName<S['all'], N>>): TabularSource<TableSelectionFromName<S['all'], N>>,
+    one<N extends TableNamesForRelations<S['curr'], 'one'>>(tableOrView: N, builder: TabularSourceBuilder<TableSelectionFromName<S['all'], N>>): TabularSource<TableSelectionFromName<S['all'], N>>,
+    throughMany(table: S['tableNames'], foreignKey?: string): TabularChain<S>
+    throughOne(table: S['tableNames'], foreignKey?: string): TabularChain<S>
 }
 
-export type TabularSourceBuilder<T extends TableLike> = (source: TabularSource<T> & TabularSourcePlugins) => void
+export type TabularSourceBuilder<S extends TableSelection = TableSelection> = (source: TabularSource<S> & TabularSourcePlugins) => void
 
-export type TabularSourceOptions<T extends TableLike> = {
+export type TabularSourceOptions<S extends TableSelection> = {
     buildContext: GraphBuildContext,
-    name: string,
-    builder: TabularSourceBuilder<T>,
+    name: S['tableNames'],
+    builder: TabularSourceBuilder<S>,
 }
 
 export type TabularSourceToSqlOptions = {

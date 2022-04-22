@@ -310,6 +310,8 @@ export type AuthConnection = {
     type: string,
     auth_id: string,
     user_id: number,
+    __links: 
+        { type: 'one', destTable: 'User', destColumn: 'id', srcColumn: 'user_id' },
 };
 
 export type CachedClusters = {
@@ -348,6 +350,11 @@ export type Event = {
     number_of_participants?: number,
     dato_id?: string,
     plot_id?: number,
+    __links: 
+        { type: 'one', destTable: 'Plot', destColumn: 'id', srcColumn: 'plot_id' } |
+        { type: 'many', destTable: 'EventGroup', destColumn: 'event_id', srcColumn: 'id' } |
+        { type: 'many', destTable: 'EventSpeciesToPlant', destColumn: 'event_id', srcColumn: 'id' } |
+        { type: 'many', destTable: 'Tree', destColumn: 'event_id', srcColumn: 'id' },
 };
 
 export type EventGroup = {
@@ -356,12 +363,18 @@ export type EventGroup = {
     group_event_role: unknown,
     event_id: number,
     group_id: number,
+    __links: 
+        { type: 'one', destTable: 'Event', destColumn: 'id', srcColumn: 'event_id' } |
+        { type: 'one', destTable: 'Group', destColumn: 'id', srcColumn: 'group_id' },
 };
 
 export type EventSpeciesToPlant = {
     __tableName: 'EventSpeciesToPlant',
     event_id: number,
     specie_id: number,
+    __links: 
+        { type: 'one', destTable: 'Event', destColumn: 'id', srcColumn: 'event_id' } |
+        { type: 'one', destTable: 'Specie', destColumn: 'id', srcColumn: 'specie_id' },
 };
 
 export type Gift = {
@@ -372,6 +385,9 @@ export type Gift = {
     status: unknown,
     vouchercode?: string,
     purpose_id?: string,
+    __links: 
+        { type: 'many', destTable: 'Order', destColumn: 'gift_id', srcColumn: 'id' } |
+        { type: 'many', destTable: 'Subscription', destColumn: 'gift_id', srcColumn: 'id' },
 };
 
 export type Group = {
@@ -381,6 +397,12 @@ export type Group = {
     name: string,
     dato_id?: string,
     parent_group_id?: number,
+    __links: 
+        { type: 'one', destTable: 'Group', destColumn: 'id', srcColumn: 'parent_group_id' } |
+        { type: 'many', destTable: 'EventGroup', destColumn: 'group_id', srcColumn: 'id' } |
+        { type: 'many', destTable: 'Group', destColumn: 'parent_group_id', srcColumn: 'id' } |
+        { type: 'many', destTable: 'TreeRelation', destColumn: 'group_id', srcColumn: 'id' } |
+        { type: 'many', destTable: 'UserGroup', destColumn: 'group_id', srcColumn: 'id' },
 };
 
 export type Order = {
@@ -397,6 +419,11 @@ export type Order = {
     gift_id?: number,
     subscription_id?: number,
     user_id: number,
+    __links: 
+        { type: 'one', destTable: 'Gift', destColumn: 'id', srcColumn: 'gift_id' } |
+        { type: 'one', destTable: 'Subscription', destColumn: 'id', srcColumn: 'subscription_id' } |
+        { type: 'one', destTable: 'User', destColumn: 'id', srcColumn: 'user_id' } |
+        { type: 'many', destTable: 'Tree', destColumn: 'order_id', srcColumn: 'id' },
 };
 
 export type Plot = {
@@ -408,6 +435,9 @@ export type Plot = {
     name: string,
     objective_use?: unknown,
     dato_id: string,
+    __links: 
+        { type: 'many', destTable: 'Event', destColumn: 'plot_id', srcColumn: 'id' } |
+        { type: 'many', destTable: 'PlotSpeciesToPlant', destColumn: 'plot_id', srcColumn: 'id' },
 };
 
 export type PlotSpeciesToPlant = {
@@ -416,6 +446,9 @@ export type PlotSpeciesToPlant = {
     dato_id: string,
     plot_id: number,
     specie_id: number,
+    __links: 
+        { type: 'one', destTable: 'Plot', destColumn: 'id', srcColumn: 'plot_id' } |
+        { type: 'one', destTable: 'Specie', destColumn: 'id', srcColumn: 'specie_id' },
 };
 
 export type Specie = {
@@ -424,6 +457,11 @@ export type Specie = {
     family?: string,
     genus?: string,
     dato_id: string,
+    __links: 
+        { type: 'many', destTable: 'EventSpeciesToPlant', destColumn: 'specie_id', srcColumn: 'id' } |
+        { type: 'many', destTable: 'PlotSpeciesToPlant', destColumn: 'specie_id', srcColumn: 'id' } |
+        { type: 'many', destTable: 'SpecieLocalization', destColumn: 'specie_id', srcColumn: 'id' } |
+        { type: 'many', destTable: 'Tree', destColumn: 'species_id', srcColumn: 'id' },
 };
 
 export type SpecieLocalization = {
@@ -431,6 +469,8 @@ export type SpecieLocalization = {
     common_names: string,
     language: string,
     specie_id: number,
+    __links: 
+        { type: 'one', destTable: 'Specie', destColumn: 'id', srcColumn: 'specie_id' },
 };
 
 export type Subscription = {
@@ -446,6 +486,10 @@ export type Subscription = {
     shopper_locale: string,
     gift_id?: number,
     subscriber_id: number,
+    __links: 
+        { type: 'one', destTable: 'Gift', destColumn: 'id', srcColumn: 'gift_id' } |
+        { type: 'one', destTable: 'User', destColumn: 'id', srcColumn: 'subscriber_id' } |
+        { type: 'many', destTable: 'Order', destColumn: 'subscription_id', srcColumn: 'id' },
 };
 
 export type Tree = {
@@ -461,6 +505,11 @@ export type Tree = {
     picture_id?: string,
     species_id: number,
     uuid: unknown,
+    __links: 
+        { type: 'one', destTable: 'Event', destColumn: 'id', srcColumn: 'event_id' } |
+        { type: 'one', destTable: 'Order', destColumn: 'id', srcColumn: 'order_id' } |
+        { type: 'one', destTable: 'Specie', destColumn: 'id', srcColumn: 'species_id' } |
+        { type: 'many', destTable: 'TreeRelation', destColumn: 'tree_id', srcColumn: 'id' },
 };
 
 export type TreeRelation = {
@@ -470,6 +519,10 @@ export type TreeRelation = {
     group_id?: number,
     tree_id: number,
     user_id?: number,
+    __links: 
+        { type: 'one', destTable: 'Group', destColumn: 'id', srcColumn: 'group_id' } |
+        { type: 'one', destTable: 'Tree', destColumn: 'id', srcColumn: 'tree_id' } |
+        { type: 'one', destTable: 'User', destColumn: 'id', srcColumn: 'user_id' },
 };
 
 export type User = {
@@ -481,6 +534,12 @@ export type User = {
     given_name?: string,
     newsletter_opt_in: boolean,
     surname?: string,
+    __links: 
+        { type: 'many', destTable: 'AuthConnection', destColumn: 'user_id', srcColumn: 'id' } |
+        { type: 'many', destTable: 'Order', destColumn: 'user_id', srcColumn: 'id' } |
+        { type: 'many', destTable: 'Subscription', destColumn: 'subscriber_id', srcColumn: 'id' } |
+        { type: 'many', destTable: 'TreeRelation', destColumn: 'user_id', srcColumn: 'id' } |
+        { type: 'many', destTable: 'UserGroup', destColumn: 'user_id', srcColumn: 'id' },
 };
 
 export type UserGroup = {
@@ -489,6 +548,9 @@ export type UserGroup = {
     role: unknown,
     group_id: number,
     user_id: number,
+    __links: 
+        { type: 'one', destTable: 'Group', destColumn: 'id', srcColumn: 'group_id' } |
+        { type: 'one', destTable: 'User', destColumn: 'id', srcColumn: 'user_id' },
 };
 
 export type _prismaMigrations = {

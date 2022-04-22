@@ -1,6 +1,6 @@
 import { GraphBuildContext } from "../context"
 import { RelationType } from "../types"
-import { Item, TabularChain, TabularSource, TabularSourceBuilder } from "./types"
+import { Item, TableSelection, TableSelectionFromName, TabularChain, TabularSource, TabularSourceBuilder } from "./types"
 import { createNestedTabularSource } from "./nested-tabular-source"
 import { TableLike } from "../../type-utils"
 
@@ -18,11 +18,11 @@ type CreateThroughChainOptions = {
     addTabularSourceItem(item: Item): void;
 }
 
-export function createThroughChain<T extends TableLike>({ buildContext, initialThrough, addTabularSourceItem }: CreateThroughChainOptions): TabularChain<T> {
+export function createThroughChain<S extends TableSelection>({ buildContext, initialThrough, addTabularSourceItem }: CreateThroughChainOptions) {
     const throughs: ThroughCollection = [initialThrough]
 
-    return {
-        throughMany(table: string, foreignKey?: string) {
+    const chain: TabularChain<S> = {
+        throughMany(table, foreignKey?) {
             throughs.push({
                 tableName: table,
                 foreignKey,
@@ -30,7 +30,7 @@ export function createThroughChain<T extends TableLike>({ buildContext, initialT
             })
             return this
         },
-        throughOne(table: string, foreignKey?: string) {
+        throughOne(table, foreignKey?) {
             throughs.push({
                 tableName: table,
                 foreignKey,
@@ -38,8 +38,8 @@ export function createThroughChain<T extends TableLike>({ buildContext, initialT
             })
             return this
         },
-        many(tableOrView: string, foreignKeyOrFn: TabularSourceBuilder<T> | string, builder?: TabularSourceBuilder<T>): TabularSource<T> {
-            let item: TabularSource<T>;
+        many<N extends S['tableNames']>(tableOrView: N, foreignKeyOrFn: string | TabularSourceBuilder<TableSelectionFromName<S['all'], N>>, builder?: TabularSourceBuilder<TableSelectionFromName<S['all'], N>>) {
+            let item: TabularSource<TableSelectionFromName<S['all'], N>>;
             if (typeof foreignKeyOrFn === 'function') {
                 item = createNestedTabularSource({ buildContext, name: tableOrView, builder: foreignKeyOrFn }, RelationType.Many, undefined, throughs);
             } else {
@@ -48,8 +48,8 @@ export function createThroughChain<T extends TableLike>({ buildContext, initialT
             addTabularSourceItem(item)
             return item
         },
-        one(tableOrView: string, foreignKeyOrFn: TabularSourceBuilder<T> | string, builder?: TabularSourceBuilder<T>): TabularSource<T> {
-            let item: TabularSource<T>;
+        one<N extends S['tableNames']>(tableOrView: N, foreignKeyOrFn: string | TabularSourceBuilder<TableSelectionFromName<S['all'], N>>, builder?: TabularSourceBuilder<TableSelectionFromName<S['all'], N>>) {
+            let item: TabularSource<TableSelectionFromName<S['all'], N>>;
             if (typeof foreignKeyOrFn === 'function') {
                 item = createNestedTabularSource({ buildContext, name: tableOrView, builder: foreignKeyOrFn }, RelationType.One, undefined, throughs);
             } else {
@@ -59,4 +59,6 @@ export function createThroughChain<T extends TableLike>({ buildContext, initialT
             return item
         }
     }
+
+    return chain;
 }
