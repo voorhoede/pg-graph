@@ -32,7 +32,7 @@ export interface TabularSource<S extends TableSelection = TableSelection> extend
     alias(name: string): TabularSource<S>,
     where<N extends TableFieldNames<S['fields']>>(name: N, sign: ValidComparisonSign, value: S['fields'][N]): TabularSource<S>,
     where(fn: (builder: WhereBuilder<S['fields']>) => void): TabularSource<S>,
-    field(name: TableFieldNames<S['fields']>): Field,
+    field<N extends TableFieldNames<S['fields']>>(name: N): Field,
     value(jsonProp: string, value: any): Value,
     orderBy(name: TableFieldNames<S['fields']>, mode?: OrderDirection): TabularSource<S>
 }
