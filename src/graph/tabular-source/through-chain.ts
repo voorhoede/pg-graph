@@ -1,8 +1,8 @@
 import { GraphBuildContext } from "../context"
 import { RelationType } from "../types"
-import { Item, TableSelection, TableSelectionFromName, TabularChain, TabularSource, TabularSourceBuilder } from "./types"
+import { Item, TabularChain } from "./types"
 import { createNestedTabularSource } from "./nested-tabular-source"
-import { TableLike } from "../../type-utils"
+import { TableSelection } from "../../type-utils"
 
 export type ThroughItem = {
     tableName: string,
@@ -28,7 +28,7 @@ export function createThroughChain<S extends TableSelection>({ buildContext, ini
                 foreignKey,
                 rel: RelationType.Many,
             })
-            return this
+            return this as any
         },
         throughOne(table, foreignKey?) {
             throughs.push({
@@ -36,24 +36,24 @@ export function createThroughChain<S extends TableSelection>({ buildContext, ini
                 foreignKey,
                 rel: RelationType.One,
             })
-            return this
+            return this as any
         },
-        many<N extends S['tableNames']>(tableOrView: N, foreignKeyOrFn: string | TabularSourceBuilder<TableSelectionFromName<S['all'], N>>, builder?: TabularSourceBuilder<TableSelectionFromName<S['all'], N>>) {
-            let item: TabularSource<TableSelectionFromName<S['all'], N>>;
+        many(tableOrView, foreignKeyOrFn, builder?) {
+            let item: ReturnType<TabularChain['many']>;
             if (typeof foreignKeyOrFn === 'function') {
                 item = createNestedTabularSource({ buildContext, name: tableOrView, builder: foreignKeyOrFn }, RelationType.Many, undefined, throughs);
             } else {
-                item = createNestedTabularSource({ buildContext, name: tableOrView, builder: builder! }, RelationType.Many, foreignKeyOrFn, throughs);
+                item = createNestedTabularSource({ buildContext, name: tableOrView, builder: builder as any }, RelationType.Many, foreignKeyOrFn, throughs);
             }
             addTabularSourceItem(item)
             return item
         },
-        one<N extends S['tableNames']>(tableOrView: N, foreignKeyOrFn: string | TabularSourceBuilder<TableSelectionFromName<S['all'], N>>, builder?: TabularSourceBuilder<TableSelectionFromName<S['all'], N>>) {
-            let item: TabularSource<TableSelectionFromName<S['all'], N>>;
+        one(tableOrView, foreignKeyOrFn, builder?) {
+            let item: ReturnType<TabularChain['one']>;
             if (typeof foreignKeyOrFn === 'function') {
                 item = createNestedTabularSource({ buildContext, name: tableOrView, builder: foreignKeyOrFn }, RelationType.One, undefined, throughs);
             } else {
-                item = createNestedTabularSource({ buildContext, name: tableOrView, builder: builder! }, RelationType.One, foreignKeyOrFn, throughs);
+                item = createNestedTabularSource({ buildContext, name: tableOrView, builder: builder! as any }, RelationType.One, foreignKeyOrFn, throughs);
             }
             addTabularSourceItem(item)
             return item

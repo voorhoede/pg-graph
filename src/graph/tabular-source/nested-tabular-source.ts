@@ -2,11 +2,12 @@ import { n, json, JoinType } from "../../sql-ast"
 import { RelationType } from "../types"
 import { createBaseTabularSource } from "./base-tabular-source"
 import { ThroughCollection, ThroughItem } from "./through-chain"
-import { TableSelection, TabularSourceOptions } from "./types"
+import { TabularSourceOptions } from "./types"
 import { exhaustiveCheck } from "../../utils"
 import * as joinHelpers from './join-helpers'
 import { itemsToSql } from "./items-to-sql"
 import { GraphToSqlContext } from "../context"
+import { TableSelection } from "../../type-utils"
 
 export function createNestedTabularSource<S extends TableSelection>(options: TabularSourceOptions<S>, relType: RelationType, foreignKey?: string, through?: ThroughCollection) {
     return createBaseTabularSource(options, ({ targetTableName, statement, ctx, items, name, countCondition }) => {

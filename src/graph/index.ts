@@ -3,15 +3,15 @@ import { JoinType, json, n } from "../sql-ast";
 import { toSqlKey } from "./types";
 import { createFormatter } from "../sql-ast/formatting";
 import { createNodeToSqlContext } from "../sql-ast/context";
-import { TableSelection, TableSelectionFromName, TabularSource, TabularSourceBuilder } from './tabular-source/types'
+import { TabularSource, TabularSourceBuilder } from './tabular-source/types'
 import { createRootTabularSource } from './tabular-source/root-tabular-source'
-import type { TableForTableName, TableLike, TableName } from '../type-utils'
+import type { DefaultTable, TableLike, TableName, TableSelectionFromName } from '../type-utils'
 
 export type GraphQueryToSqlOptions = {
     prettifyJson?: boolean
 }
 
-export function graphQuery<T extends TableLike = TableLike>() {
+export function graphQuery<T extends TableLike = DefaultTable>() {
     const sources: TabularSource<any>[] = [];
     const graphBuildContext: GraphBuildContext = createGraphBuildContext()
 

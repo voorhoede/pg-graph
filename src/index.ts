@@ -6,7 +6,14 @@ import { Tables } from '../types'
 import { graphQuery } from './graph'
 import { OrderDirection } from './sql-ast'
 
-const x = graphQuery()
+const x = graphQuery<Tables>()
+
+x.source('PlotSpeciesToPlant', q => {
+    q.one('Plot', 'id', q => { // should be never when no types are known
+        q.field('area')
+    })
+})
+
 x.source('Tree', q => {
     q.field('created_at')
 

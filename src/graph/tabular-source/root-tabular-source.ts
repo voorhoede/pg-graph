@@ -1,8 +1,9 @@
 
 import { JoinType, json, n } from "../../sql-ast";
 import { createBaseTabularSource } from "./base-tabular-source";
-import { TableSelection, TabularSourceOptions } from "./types";
+import { TabularSourceOptions } from "./types";
 import { itemsToSql } from "./items-to-sql";
+import { TableSelection } from "../../type-utils";
 
 export function createRootTabularSource<S extends TableSelection>(options: TabularSourceOptions<S>) {
     return createBaseTabularSource(options, ({ targetTableName, statement, ctx, items, name, countCondition }) => {
