@@ -1,7 +1,6 @@
-import { Tables } from "../../../types";
 import { OrderDirection, ValidComparisonSign } from "../../sql-ast";
 import { SelectStatement } from "../../sql-ast/nodes";
-import { TableFieldNames, TableFields, TableForTableName, TableLike, TableName, TableNamesForRelations, TableRelationDestColumn, TableSelection, TableSelectionFromName } from "../../type-utils";
+import { TableFieldNames, TableNamesForRelations, TableRelationDestColumn, TableSelection, TableSelectionFromName } from "../../type-utils";
 import { AggBuilder } from "../agg-builder";
 import { GraphBuildContext, GraphToSqlContext } from "../context";
 import { Field } from "../field";
