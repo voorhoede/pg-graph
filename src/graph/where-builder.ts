@@ -6,6 +6,8 @@ import { GraphBuildContext } from "./context"
 
 export type LogicalOperator = 'and' | 'or'
 
+export type WhereBuilderHandler<Fields> = (b: WhereBuilder<Fields>) => void
+
 export interface WhereBuilderChain<Fields> {
     and: WhereBuilder<Fields>,
     or: WhereBuilder<Fields>
@@ -15,7 +17,7 @@ export type WhereBuilderResultNode = n.Compare | n.And | n.Or | n.Group | undefi
 
 export type WhereBuilder<Fields, N extends TableFieldNames<Fields> = TableFieldNames<Fields>> = {
     (name: N, comparison: ValidComparisonSign, value: Fields[N]): WhereBuilderChain<Fields>,
-    (handler: (b: WhereBuilder<Fields>) => void): WhereBuilderChain<Fields>,
+    (handler: WhereBuilderHandler<Fields>): WhereBuilderChain<Fields>,
 }
 export type WhereBuilderResult = {
     setTableContext(ref: n.TableRef): void
@@ -83,7 +85,7 @@ export function createWhereBuilder<Fields>(ctx: GraphBuildContext) {
             }
         }
 
-        function addGroup(op: LogicalOperator, builderHandler: (b: WhereBuilder<Fields>) => void) {
+        function addGroup(op: LogicalOperator, builderHandler: WhereBuilderHandler<Fields>) {
             const { builder, result } = createBuilderGroup(op)
             builderHandler(builder)
             if (result.node) {

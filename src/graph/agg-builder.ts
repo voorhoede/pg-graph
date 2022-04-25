@@ -1,6 +1,7 @@
 import { GraphBuildContext } from "../graph/context";
 import { n, json, SqlNode } from "../sql-ast";
 import { BuiltinGroups } from "../sql-ast/json-utils";
+import { TableFieldNames } from "../type-utils";
 import { createWhereBuilder, WhereBuilder } from "./where-builder";
 
 export type AggBuilder<Fields> = {
@@ -17,7 +18,7 @@ export type AggBuilderResult = {
 }
 
 export type AggOptions<Fields> = {
-    column: string,
+    column: TableFieldNames<Fields>,
     alias?: string,
     distinct?: boolean,
     filter?: (builder: WhereBuilder<Fields>) => void,

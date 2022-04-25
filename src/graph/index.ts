@@ -1,4 +1,4 @@
-import { createGraphBuildContext, createGraphToSqlContext, GraphBuildContext } from "./context";
+import { createGraphBuildContext, createGraphToSqlContext } from "./context";
 import { JoinType, json, n } from "../sql-ast";
 import { toSqlKey } from "./types";
 import { createFormatter } from "../sql-ast/formatting";
@@ -13,7 +13,7 @@ export type GraphQueryToSqlOptions = {
 
 export function graphQuery<T extends TableLike = DefaultTable>() {
     const sources: TabularSource<any>[] = [];
-    const graphBuildContext: GraphBuildContext = createGraphBuildContext()
+    const graphBuildContext = createGraphBuildContext()
 
     return {
         source<SourceName extends TableName<T>>(name: SourceName, builder: TabularSourceBuilder<TableSelectionFromName<T, SourceName>>) {
