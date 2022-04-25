@@ -2,6 +2,7 @@ import { SqlNode } from './node-types'
 import { JoinType, OrderDirection, ValidComparisonSign } from "./types"
 import { WhereBuilderResultNode } from '../graph/where-builder'
 import { NodeToSqlContext } from './context'
+import { escapeIdentifier } from '../utils'
 
 
 export class Operator {
@@ -275,9 +276,7 @@ export class CompositeType {
     toSql(ctx: NodeToSqlContext) {
         ctx.formatter
             .write('(')
-            .join(this.items, (col) => {
-                col.toSql(ctx)
-            }, ',')
+            .join(this.items, (col) => col.toSql(ctx), ',')
             .write(')')
     }
 }
@@ -320,7 +319,7 @@ export class TableRef {
         return new Column(name, this.name)
     }
     toSql(ctx: NodeToSqlContext) {
-        ctx.formatter.write(`"${this.name}"`)
+        ctx.formatter.write(escapeIdentifier(this.name))
     }
 }
 
@@ -352,9 +351,9 @@ export class Column {
         const resolvedTable = this.table ?? ctx.table
         if (typeof resolvedTable === 'string') {
             new TableRef(resolvedTable).toSql(ctx)
-            ctx.formatter.write(`."${this.name}"`)
+            ctx.formatter.write(`.${escapeIdentifier(this.name)}`)
         } else {
-            ctx.formatter.write(`"${this.name}"`)
+            ctx.formatter.write(escapeIdentifier(this.name))
         }
     }
 }

@@ -1,5 +1,5 @@
 
-export function exhaustiveCheck(param: never): never {
+export function exhaustiveCheck(_param: never): never {
     throw new Error('should not reach here')
 }
 
@@ -11,4 +11,8 @@ export function pgTypeForJsValue(value: any) {
         case 'number':
             return 'int'
     }
+}
+
+export function escapeIdentifier(ident: string) {
+    return '"' + ident.replace(/"/g, "") + '"'
 }
