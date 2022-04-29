@@ -1,20 +1,19 @@
-import { ValidComparisonSign } from "../../sql-ast"
 import { createAgg } from "../agg"
-import { AggBuilder, createAggBuilder } from "../agg-builder"
+import { createAggBuilder } from "../agg-builder"
 import { createField } from "../field"
 import { createLimit } from "../limit"
 import { createOrderBy } from "../order-by"
 import { GraphItemTypes, RelationType, toSqlKey } from "../types"
 import { createValue } from "../value"
-import { createWhereBuilder, WhereBuilder } from "../where-builder"
+import { createWhereBuilder } from "../where-builder"
 import { createWhereClause } from "../where-clause"
 
 import * as plugins from '../../plugins'
-import { Item, TabularChain, TabularSource, TabularSourceBuilder, TabularSourceOptions, TabularSourcePlugins, TabularSourceToSqlOptions } from "./types"
+import { Item, TabularChain, TabularSource, TabularSourceOptions, TabularSourcePlugins, TabularSourceToSqlOptions } from "./types"
 import { createThroughChain, ThroughItem } from "./through-chain"
 import { CountCondition, createCountCondition } from "./count-condition"
 import { createNestedTabularSource } from "./nested-tabular-source"
-import { TableFieldNames, TableFields, TableNamesForRelations, TableRelationDestColumn, TableSelection, TableSelectionFromName } from "../../type-utils"
+import { TableFields, TableSelection } from "../../type-utils"
 
 export function createBaseTabularSource<S extends TableSelection>({ buildContext, name, builder }: TabularSourceOptions<S>, toSql: (options: TabularSourceToSqlOptions) => void) {
     const items: Item[] = []
@@ -49,23 +48,14 @@ export function createBaseTabularSource<S extends TableSelection>({ buildContext
             return this
         },
 
-        throughMany(table, foreignKey?) {
-            const initialThrough: ThroughItem = {
-                tableName: table,
-                foreignKey,
-                rel: RelationType.Many,
-            }
-
-            return createThroughChain({ buildContext, initialThrough, addTabularSourceItem: addItem })
+        throughMany(table, foreignKey?, whereBuilderHandler?) {
+            return createThroughChain<any>({ buildContext, addTabularSourceItem: addItem })
+                .throughMany(table, foreignKey, whereBuilderHandler as any)
         },
 
-        throughOne(table, foreignKey?) {
-            const initialThrough: ThroughItem = {
-                tableName: table,
-                foreignKey,
-                rel: RelationType.One,
-            }
-            return createThroughChain({ buildContext, initialThrough, addTabularSourceItem: addItem })
+        throughOne(table, foreignKey?, whereBuilderHandler?) {
+            return createThroughChain<any>({ buildContext, addTabularSourceItem: addItem })
+                .throughOne(table, foreignKey, whereBuilderHandler as any)
         },
 
         many(name, foreignKeyOrFn, builder?) {

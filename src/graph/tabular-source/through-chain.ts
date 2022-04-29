@@ -3,38 +3,61 @@ import { RelationType } from "../types"
 import { Item, TabularChain } from "./types"
 import { createNestedTabularSource } from "./nested-tabular-source"
 import { TableSelection } from "../../type-utils"
+import { createWhereBuilder, WhereBuilderHandler, WhereBuilderResult } from "../where-builder"
 
 export type ThroughItem = {
     tableName: string,
     foreignKey?: string,
     rel: RelationType,
+    whereBuilderResult?: WhereBuilderResult
 }
 
 export type ThroughCollection = ThroughItem[]
 
 type CreateThroughChainOptions = {
     buildContext: GraphBuildContext,
-    initialThrough: ThroughItem,
     addTabularSourceItem(item: Item): void;
 }
 
-export function createThroughChain<S extends TableSelection>({ buildContext, initialThrough, addTabularSourceItem }: CreateThroughChainOptions) {
-    const throughs: ThroughCollection = [initialThrough]
+export function createThroughChain<S extends TableSelection>({ buildContext, addTabularSourceItem }: CreateThroughChainOptions) {
+    const throughs: ThroughCollection = []
+
+    function getWhereBuilderResult(handler?: WhereBuilderHandler<S['fields']>): WhereBuilderResult | undefined {
+        if(!handler) {
+            return undefined
+        }
+        const whereBuilder = createWhereBuilder<S['fields']>(buildContext)
+        handler(whereBuilder.builder)
+        
+        return whereBuilder.result
+    }
 
     const chain: TabularChain<S> = {
-        throughMany(table, foreignKey?) {
+        throughMany(table, foreignKey?, whereBuilderHandler?) {
+            if(typeof foreignKey === 'function') {
+                whereBuilderHandler = foreignKey
+                foreignKey = undefined
+            }
+
             throughs.push({
                 tableName: table,
                 foreignKey,
                 rel: RelationType.Many,
+                whereBuilderResult: getWhereBuilderResult(whereBuilderHandler as any),
             })
             return this as any
         },
-        throughOne(table, foreignKey?) {
+        throughOne(table, foreignKey?, whereBuilderHandler?) {
+            if(typeof foreignKey === 'function') {
+                whereBuilderHandler = foreignKey
+                foreignKey = undefined
+            }
+
             throughs.push({
                 tableName: table,
                 foreignKey,
                 rel: RelationType.One,
+                whereBuilderResult: getWhereBuilderResult(whereBuilderHandler as any),
             })
             return this as any
         },

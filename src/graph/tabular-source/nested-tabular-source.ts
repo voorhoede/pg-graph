@@ -64,6 +64,11 @@ export function createNestedTabularSource<S extends TableSelection>(options: Tab
                         exhaustiveCheck(prevRel)
                     }
 
+                    if(cur.item.whereBuilderResult?.node) {
+                        cur.item.whereBuilderResult.setTableContext(cur.tableRef)
+                        subStatement.addWhereClause(cur.item.whereBuilderResult.node)
+                    }
+
                     subStatement.joins.push(new n.Join(
                         JoinType.INNER_JOIN,
                         cur.tableRef,
@@ -120,7 +125,6 @@ export function createNestedTabularSource<S extends TableSelection>(options: Tab
 
                 const sourceTableAlias = ctx.genTableAlias(source.tableName)
                 subStatement.source = new n.TableRefWithAlias(new n.TableRef(source.tableName), sourceTableAlias)
-                subStatement.limit = new n.RawValue(1)
 
                 const [firstCol, secondCol] = source.rel === RelationType.Many ? [subStatement.source, parentTable] : [parentTable, subStatement.source]
                 subStatement.addWhereClause(
@@ -130,6 +134,11 @@ export function createNestedTabularSource<S extends TableSelection>(options: Tab
                         source.foreignKey
                     )
                 )
+
+                if(source.whereBuilderResult?.node) {
+                    source.whereBuilderResult.setTableContext(subStatement.source)
+                    subStatement.addWhereClause(source.whereBuilderResult.node)
+                }
 
                 const lastItem = throughItemIter(remainingThroughItems, ctx, (prev, cur) => {
                     let comparison: n.Compare;
@@ -150,12 +159,23 @@ export function createNestedTabularSource<S extends TableSelection>(options: Tab
                         exhaustiveCheck(cur.item.rel)
                     }
 
+                    if(cur.item.whereBuilderResult?.node) {
+                        cur.item.whereBuilderResult.setTableContext(cur.tableRef)
+                        subStatement.addWhereClause(cur.item.whereBuilderResult.node)
+                    }
+
                     subStatement.joins.push(new n.Join(
                         JoinType.INNER_JOIN,
                         cur.tableRef,
                         comparison,
                     ))
                 })
+
+                if(through[through.length-1].rel === RelationType.One) {
+                    subStatement.limit = new n.RawValue(1)
+                } else {
+                    json.convertDataFieldsToAgg(subStatement)
+                }
 
                 subStatement.joins.push(new n.Join(
                     JoinType.INNER_JOIN,

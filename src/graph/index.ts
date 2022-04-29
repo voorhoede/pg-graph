@@ -11,12 +11,12 @@ export type GraphQueryToSqlOptions = {
     prettifyJson?: boolean
 }
 
-export function graphQuery<T extends TableLike = DefaultTable>() {
+export function graphQuery<AT extends TableLike = DefaultTable>() {
     const sources: TabularSource<any>[] = [];
     const graphBuildContext = createGraphBuildContext()
 
     return {
-        source<SourceName extends TableName<T>>(name: SourceName, builder: TabularSourceBuilder<TableSelectionFromName<T, SourceName>>) {
+        source<SourceName extends TableName<AT>>(name: SourceName, builder: TabularSourceBuilder<TableSelectionFromName<AT, SourceName>>) {
             const item = createRootTabularSource({
                 buildContext: graphBuildContext,
                 name,

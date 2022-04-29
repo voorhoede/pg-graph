@@ -23,10 +23,10 @@ export type TableRelationsByType<T extends TableLike, Type extends TableRelation
     ? TableRelationLink
     : Extract<Exclude<T['__links'], undefined>, { type: Type }>
 
-export type TableNamesForRelations<T extends TableLike, Type extends TableRelationType> = TableRelationsByType<T, Type>['destTable']
-export type TableRelationDestColumn<T extends TableLike, Type extends TableRelationType, Name extends TableNamesForRelations<T, Type>> = T extends { __default: true }
+export type TableNamesForRelations<S extends TableSelection, Type extends TableRelationType> = TableRelationsByType<S['curr'], Type>['destTable']
+export type TableRelationDestColumn<S extends TableSelection, Type extends TableRelationType, Name extends TableNamesForRelations<S, Type>> = S['curr'] extends { __default: true }
     ? string
-    : Extract<TableRelationsByType<T, Type>, { destTable: Name }>['destColumn']
+    : Extract<TableRelationsByType<S['curr'], Type>, { destTable: Name }>['destColumn']
 
 export type TableSelection<AT extends TableLike = TableLike, T extends TableLike = TableLike> = {
     all: AT,

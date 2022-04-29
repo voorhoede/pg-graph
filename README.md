@@ -53,3 +53,12 @@ console.log(row.data)
 ```
 
 Note that your data is ready to be returned from you api. No need to loop through all rows and convert it to json.
+
+## Ideas
+
+- Plugin to create semi json api (dynamic field names)
+- Create SQL function: `toFunction`
+- Where clause in through functions
+- Estimated count
+- Optimize: queries without fields should be removed
+- Optimize: throughMany -> one, should not use lateral join?

@@ -15,9 +15,9 @@ export interface WhereBuilderChain<Fields> {
 
 export type WhereBuilderResultNode = n.Compare | n.And | n.Or | n.Group | undefined
 
-export type WhereBuilder<Fields, N extends TableFieldNames<Fields> = TableFieldNames<Fields>> = {
-    (name: N, comparison: ValidComparisonSign, value: Fields[N]): WhereBuilderChain<Fields>,
-    (handler: WhereBuilderHandler<Fields>): WhereBuilderChain<Fields>,
+export type WhereBuilder<Fields, Return = WhereBuilderChain<Fields>> = {
+    <N extends TableFieldNames<Fields> = TableFieldNames<Fields>>(name: N, comparison: ValidComparisonSign, value: Exclude<Fields[N], undefined>): Return,
+    (handler: WhereBuilderHandler<Fields>): Return,
 }
 export type WhereBuilderResult = {
     setTableContext(ref: n.TableRef): void
@@ -49,7 +49,7 @@ export function createWhereBuilder<Fields>(ctx: GraphBuildContext) {
         }
 
         function createOperatorMethod(operator: LogicalOperator): WhereBuilder<Fields> {
-            return function (nameOrBuilderHandler, comparison?: ValidComparisonSign, value?): WhereBuilderChain<Fields> {
+            return function (nameOrBuilderHandler: any, comparison?: ValidComparisonSign, value?: any): WhereBuilderChain<Fields> {
                 if (typeof nameOrBuilderHandler === 'string') { // name, comparison, value
                     addOperator(operator, nameOrBuilderHandler, comparison!, value)
                 } else if(typeof nameOrBuilderHandler === 'function') { // subbuilder
