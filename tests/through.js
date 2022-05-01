@@ -82,7 +82,7 @@ test('should be able to get the blog belonging to the comments posted by user "R
     t.end()
 })
 
-test('should be able to get comments posted on blogs belonging to user "Remco"', async (t) => {
+test('should be able to get comments posted on blogs belonging to each user', async (t) => {
     const client = await connect()
 
     const query = graphQuery()

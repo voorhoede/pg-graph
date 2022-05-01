@@ -171,12 +171,6 @@ export function createNestedTabularSource<S extends TableSelection>(options: Tab
                     ))
                 })
 
-                if(through[through.length-1].rel === RelationType.One) {
-                    subStatement.limit = new n.RawValue(1)
-                } else {
-                    json.convertDataFieldsToAgg(subStatement)
-                }
-
                 subStatement.joins.push(new n.Join(
                     JoinType.INNER_JOIN,
                     targetTable,
@@ -186,6 +180,12 @@ export function createNestedTabularSource<S extends TableSelection>(options: Tab
                         foreignKey,
                     )
                 ))
+
+                if(through[through.length-1].rel === RelationType.One) {
+                    subStatement.limit = new n.RawValue(1)
+                } else {
+                    json.convertDataFieldsToAgg(subStatement)
+                }
 
                 const derivedTable = new n.DerivedTable(subStatement, subCtx.genTableAlias(targetTable.ref.name))
 
