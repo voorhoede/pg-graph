@@ -14,8 +14,8 @@ export enum GraphItemTypes {
 }
 
 export enum RelationType {
-    Many,
-    One,
+    Many = 'many',
+    One = 'one',
 }
 
 export type ToSql = {

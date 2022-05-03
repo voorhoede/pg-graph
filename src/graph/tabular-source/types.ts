@@ -14,6 +14,11 @@ export type Item = {
     order?: number
 } & ToSql
 
+export type ToSqlHints = {
+    joinStrategy: JoinStrategy;
+}
+
+export type JoinStrategy = 'agg' | 'lateral'
 
 export interface TabularSource<S extends TableSelection = TableSelection> extends TabularChain<S>, ToSql {
     type: GraphItemTypes.TABLE,
@@ -25,6 +30,7 @@ export interface TabularSource<S extends TableSelection = TableSelection> extend
     field<N extends TableFieldNames<S['fields']>>(name: N): Field,
     value(jsonProp: string, value: any): Value,
     orderBy(name: TableFieldNames<S['fields']>, mode?: OrderDirection): TabularSource<S>
+    toSqlHints(hints: ToSqlHints): void;
 }
 
 export interface TabularSourcePlugins { }
@@ -85,4 +91,5 @@ export type TabularSourceToSqlOptions = {
     statement: SelectStatement,
     items: readonly Item[],
     countCondition?: CountCondition,
+    toSqlHints: ToSqlHints,
 };

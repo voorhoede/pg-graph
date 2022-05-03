@@ -78,6 +78,7 @@ export function convertDataFieldsToAgg(statement: n.SelectStatement, nullField?:
      * To make this work we have to add the limit to a subquery.
      */
     if (statement.limit) {
+        console.log(statement.source)
         if (statement.source instanceof n.TableRefWithAlias) {
 
             const subSelect = new n.SelectStatement();

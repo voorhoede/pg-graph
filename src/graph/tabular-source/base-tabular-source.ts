@@ -9,8 +9,8 @@ import { createWhereBuilder } from "../where-builder"
 import { createWhereClause } from "../where-clause"
 
 import * as plugins from '../../plugins'
-import { Item, TabularChain, TabularSource, TabularSourceOptions, TabularSourcePlugins, TabularSourceToSqlOptions } from "./types"
-import { createThroughChain, ThroughItem } from "./through-chain"
+import { Item, TabularSource, TabularSourceOptions, TabularSourcePlugins, TabularSourceToSqlOptions, ToSqlHints } from "./types"
+import { createThroughChain } from "./through-chain"
 import { CountCondition, createCountCondition } from "./count-condition"
 import { createNestedTabularSource } from "./nested-tabular-source"
 import { TableFields, TableSelection } from "../../type-utils"
@@ -20,6 +20,9 @@ export function createBaseTabularSource<S extends TableSelection>({ buildContext
 
     let alias: string
     let countCondition: CountCondition | undefined
+    let toSqlHints: ToSqlHints = {
+        joinStrategy: 'agg'
+    }
 
     const addItem = <N extends Item>(item: N) => {
         items.push(item)
@@ -30,6 +33,10 @@ export function createBaseTabularSource<S extends TableSelection>({ buildContext
 
     const instance: TabularSource<S> = {
         type: GraphItemTypes.TABLE,
+
+        toSqlHints(hints) {
+            toSqlHints = hints;
+        },
 
         limit(count) {
             addItem(createLimit(count))
@@ -116,6 +123,7 @@ export function createBaseTabularSource<S extends TableSelection>({ buildContext
                 name: alias ?? name,
                 items,
                 countCondition,
+                toSqlHints,
             })
         }
     }
