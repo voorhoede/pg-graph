@@ -67,13 +67,15 @@ export interface TabularChain<S extends TableSelection = TableSelection> {
     one<N extends TableNamesForRelations<S,'one'>>(tableOrView: N, builder: TabularSourceBuilder<TableSelectionFromName<S['all'], N>>): TabularSource<TableSelectionFromName<S['all'], N>>,
     
     
+    throughMany<N extends TableNamesForRelations<S,'many'>>(table: N, whereBuilderHandler?: WhereBuilderHandler<TableSelectionFromName<S['all'], N>['fields']>): TabularChain<TableSelectionFromName<S['all'], N>>
+
     throughMany<N extends TableNamesForRelations<S,'many'>>(table: N, foreignKey?: TableRelationDestColumn<S, 'many', N>, whereBuilderHandler?: WhereBuilderHandler<TableSelectionFromName<S['all'], N>['fields']>): TabularChain<TableSelectionFromName<S['all'], N>>
     
-    throughMany<N extends TableNamesForRelations<S,'many'>>(table: N, whereBuilderHandler?: WhereBuilderHandler<TableSelectionFromName<S['all'], N>['fields']>): TabularChain<TableSelectionFromName<S['all'], N>>
+    
+    throughOne<N extends TableNamesForRelations<S,'one'>>(table: N, whereBuilderHandler?: WhereBuilderHandler<TableSelectionFromName<S['all'], N>['fields']>): TabularChain<TableSelectionFromName<S['all'], N>>
     
     throughOne<N extends TableNamesForRelations<S,'one'>>(table: N, foreignKey?: TableRelationDestColumn<S, 'one', N>, whereBuilderHandler?: WhereBuilderHandler<TableSelectionFromName<S['all'], N>['fields']>): TabularChain<TableSelectionFromName<S['all'], N>>
     
-    throughOne<N extends TableNamesForRelations<S,'one'>>(table: N, whereBuilderHandler?: WhereBuilderHandler<TableSelectionFromName<S['all'], N>['fields']>): TabularChain<TableSelectionFromName<S['all'], N>>
 }
 
 export type TabularSourceBuilder<S extends TableSelection = TableSelection> = (source: TabularSource<S> & TabularSourcePlugins) => void

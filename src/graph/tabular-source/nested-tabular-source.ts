@@ -48,8 +48,6 @@ export function createNestedTabularSource<S extends TableSelection>(options: Tab
     
             json.copyFieldsInto(subStatement, statement, 'data', name)
         } else {
-            json.convertDataFieldsToAgg(subStatement)
-
             if (through?.length) {
                 createJoinsForThroughChain({
                     ctx: subCtx,
@@ -71,6 +69,8 @@ export function createNestedTabularSource<S extends TableSelection>(options: Tab
                 subStatement.source = subCtx.table!
             }
 
+            json.convertDataFieldsToAgg(subStatement)
+
             // here we add a having clause when the count is at least 2. For a count of one a INNER_JOIN does the job.
             if (countCondition?.requiresAtLeast(2)) {
                 countCondition.toSql(subStatement, targetTable.name)
@@ -89,7 +89,11 @@ export function createNestedTabularSource<S extends TableSelection>(options: Tab
                 srcTable: subStatement.source!,
             })
     
-            json.addField(statement, 'data', name, derivedTable.column('data'))
+            json.addReferencesToChildFields({
+                src: derivedTable,
+                dest: statement,
+                withPrefix: name,
+            })
         }
 
     })
@@ -254,4 +258,6 @@ function connectDerivedTableToParent({
     } else {
         exhaustiveCheck(joinStrategy)
     }
+
+    
 }

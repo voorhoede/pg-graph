@@ -77,7 +77,7 @@ function createPaginationItem(buildContext: GraphBuildContext, options: OffsetLi
 
             // we move the where clause to the sub select. It's very important that the rowCount / pageSize is based on user provided filters
             statement.copyWhereClauseTo(selectWithLimit)
-            statement.clearWhereClause()
+            statement.whereClause = undefined
 
             const derivedSelectWithLimit = new n.DerivedTable(selectWithLimit, originalSourceRef.name)
 

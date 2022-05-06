@@ -38,7 +38,7 @@ function createPaginationItem(ctx: GraphBuildContext, options: KeysetPaginationO
     }
 
     function createFilteredQuery(statement: n.SelectStatement) {
-        if (statement.hasWhereClause()) {
+        if (statement.whereClause) {
             const filterSelect = new n.SelectStatement()
             filterSelect.source = statement.source
             filterSelect.fields.set(Symbol(), new n.All())
@@ -46,7 +46,7 @@ function createPaginationItem(ctx: GraphBuildContext, options: KeysetPaginationO
 
             const cteFiltered = new n.Cte('pagination_filtered', filterSelect, true)
             statement.ctes.set(cteFiltered.name, cteFiltered)
-            statement.clearWhereClause()
+            statement.whereClause = undefined
 
             return cteFiltered.ref()
         }

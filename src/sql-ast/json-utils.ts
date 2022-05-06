@@ -1,5 +1,6 @@
 import { SelectField } from "./nodes";
 import { n } from "./";
+import { walkWhereClause } from './utils'
 
 export enum BuiltinGroups {
     Data = 'data',
@@ -76,25 +77,44 @@ export function convertDataFieldsToAgg(statement: n.SelectStatement, nullField?:
     /**
      * Limit is not taken in consideration when Aggregrating. This was a bit of surprise to me...
      * To make this work we have to add the limit to a subquery.
+     * 
+     * Note that we should not copy joins because they might be references in the fields and when they are in derived table
      */
     if (statement.limit) {
-        console.log(statement.source)
         if (statement.source instanceof n.TableRefWithAlias) {
+            const originalStatementSource = statement.source
 
             const subSelect = new n.SelectStatement();
             subSelect.fields.set(Symbol(), new n.All())
             subSelect.limit = statement.limit
             subSelect.offset = statement.offset
             subSelect.source = statement.source.ref;
-            statement.copyOrderBysTo(subSelect)
-            statement.copyWhereClauseTo(subSelect)
-            statement.copyJoinsTo(subSelect)
 
-            statement.orderByColumns.length = 0
-            statement.clearWhereClause()
+            subSelect.orderByColumns = statement.orderByColumns.filter(column => {
+                return column.column instanceof n.Column && column.column.table === originalStatementSource.name
+            })
+
+            statement.orderByColumns = statement.orderByColumns.filter(column => {
+                return !(column.column instanceof n.Column) || column.column.table !== originalStatementSource.name
+            })
+
+            subSelect.whereClause = walkWhereClause(statement.whereClause, (node) => {
+                if(node.left instanceof n.Column && originalStatementSource.name === node.left.table) {
+                    return new n.Compare(
+                        new n.Column(node.left.name),
+                        node.comparison,
+                        node.right,
+                    )
+                }
+                return undefined
+            })
+
+            statement.whereClause = walkWhereClause(statement.whereClause, (node) => {
+                return !(node.left instanceof n.Column) || originalStatementSource.name !== node.left.table ? node : undefined
+            })
+
             statement.limit = undefined
             statement.offset = undefined
-            statement.joins = []
             statement.source = new n.DerivedTable(
                 subSelect,
                 statement.source.name

@@ -570,6 +570,8 @@ export type SelectField =
   | Group
   | Operator
   | All;
+
+
 export class SelectStatement {
   public fields = new Map<string | Symbol, SelectField>();
   public ctes = new Map<string, Cte>();
@@ -594,21 +596,14 @@ export class SelectStatement {
     | Subquery
     | Operator;
   public having?: Compare;
-  private whereClauseChain?: WhereBuilderResultNode;
-
-  hasWhereClause() {
-    return !!this.whereClauseChain;
-  }
-
-  clearWhereClause() {
-    this.whereClauseChain = undefined;
-  }
+  public whereClause?: WhereBuilderResultNode;
 
   addWhereClause(node: Exclude<WhereBuilderResultNode, undefined>) {
-    this.whereClauseChain = this.whereClauseChain
-      ? new And(this.whereClauseChain, node)
+    this.whereClause = this.whereClause
+      ? new And(this.whereClause, node)
       : node;
   }
+
   copyOrderBysTo(other: SelectStatement) {
     other.orderByColumns = other.orderByColumns.concat(this.orderByColumns);
   }
@@ -619,8 +614,8 @@ export class SelectStatement {
     other.joins = other.joins.concat(this.joins);
   }
   copyWhereClauseTo(other: SelectStatement) {
-    if (this.whereClauseChain) {
-      other.addWhereClause(this.whereClauseChain);
+    if (this.whereClause) {
+      other.addWhereClause(this.whereClause);
     }
   }
   copyFieldsTo(other: SelectStatement) {
@@ -686,8 +681,8 @@ export class SelectStatement {
       join.toSql(subCtx);
     });
 
-    if (this.whereClauseChain) {
-      new Where(this.whereClauseChain).toSql(subCtx);
+    if (this.whereClause) {
+      new Where(this.whereClause).toSql(subCtx);
     }
 
     if (this.groupBys.length) {
