@@ -70,9 +70,14 @@ test('should be able to get the blog belonging to the comments posted by user "R
         user: [ 
             {
                 name: 'Remco',
-                blog: {
-                    name: 'Blog about cats'
-                }
+                blog: [
+                    {
+                        name: 'Blog about cats'
+                    },
+                    {
+                        name: 'Blog about cats'
+                    }
+                ]
             },
         ]
     })
