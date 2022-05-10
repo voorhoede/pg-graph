@@ -1,8 +1,8 @@
 import { n, json, JoinType } from "../../sql-ast"
 import { RelationType } from "../types"
 import { createBaseTabularSource } from "./base-tabular-source"
-import { ThroughCollection, ThroughItem } from "./through-chain"
-import { JoinStrategy, TabularSourceOptions, ToSqlHints } from "./types"
+import { ThroughCollection } from "./through-chain"
+import { JoinStrategy, TabularSourceOptions } from "./types"
 import { exhaustiveCheck } from "../../utils"
 import * as joinHelpers from './join-helpers'
 import { itemsToSql } from "./items-to-sql"
@@ -21,6 +21,7 @@ export function createNestedTabularSource<S extends TableSelection>(options: Tab
 
         itemsToSql(items, subStatement, subCtx)
 
+        // we can only use a one to one relation when the requested relation is one AND the through chain does not contain a many
         const oneToOneRelation = relType === RelationType.One && !through?.some(item => item.rel === RelationType.Many)
 
         if(oneToOneRelation) {
@@ -43,7 +44,12 @@ export function createNestedTabularSource<S extends TableSelection>(options: Tab
                     )
                 ))
             }
+
+            if(subStatement.orderByColumns.length) {
+                console.warn('Warning: Order by has no effect for one to one relations')
+            }
     
+            // we only copy the where clause to the primary statement. All other stuff has no effect on a one to one relation
             subStatement.copyWhereClauseTo(statement)
     
             json.copyFieldsInto(subStatement, statement, 'data', name)
